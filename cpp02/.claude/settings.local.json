@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/kkz/Downloads/cpp/cpp02/ex00/test_comprehensive)",
+      "Bash(/Users/kkz/Downloads/cpp/cpp02/ex01/test_comprehensive)",
+      "Bash(leaks:*)",
+      "Bash(/Users/kkz/Downloads/cpp/cpp02/orthodox_check)",
+      "Bash(c++:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

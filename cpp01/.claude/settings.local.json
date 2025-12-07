@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(c++:*)",
+      "Bash(./test_overflow)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
