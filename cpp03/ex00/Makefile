@@ -1,6 +1,6 @@
 NAME = Aaaaand..._OPEN!
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic
 SRCS = main.cpp ClapTrap.cpp
 OBJS = $(SRCS:.cpp=.o)
 
