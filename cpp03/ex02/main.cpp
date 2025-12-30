@@ -1,72 +1,72 @@
 #include "ClapTrap.hpp"
-#include "ScavTrap.hpp"
+#include "FragTrap.hpp"
 
 int main() {
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 1: ScavTrap Creation" << std::endl;
+	std::cout << "   TEST 1: FragTrap Creation" << std::endl;
 	std::cout << "========================================" << std::endl;
-	std::cout << "Stats: HP=100, EP=50, AD=20" << std::endl;
-	std::cout << "Construction order: ClapTrap -> ScavTrap" << std::endl;
-	ScavTrap scav("Scavvy");
+	std::cout << "Stats: HP=100, EP=100, AD=30" << std::endl;
+	std::cout << "Construction order: ClapTrap -> FragTrap" << std::endl;
+	FragTrap frag("Fraggy");
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 2: attack() - ScavTrap override" << std::endl;
+	std::cout << "   TEST 2: attack() - inherited from ClapTrap" << std::endl;
 	std::cout << "========================================" << std::endl;
-	scav.attack("Enemy1");
-	scav.attack("Enemy2");
+	frag.attack("Enemy1");
+	frag.attack("Enemy2");
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 3: takeDamage() - inherited" << std::endl;
 	std::cout << "========================================" << std::endl;
-	scav.takeDamage(30);
-	scav.takeDamage(20);
+	frag.takeDamage(30);
+	frag.takeDamage(20);
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 4: beRepaired() - inherited" << std::endl;
 	std::cout << "========================================" << std::endl;
-	scav.beRepaired(25);
-	scav.beRepaired(10);
+	frag.beRepaired(25);
+	frag.beRepaired(10);
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 5: guardGate() - ScavTrap special" << std::endl;
+	std::cout << "   TEST 5: highFivesGuys() - FragTrap special" << std::endl;
 	std::cout << "========================================" << std::endl;
-	scav.guardGate();
+	frag.highFivesGuys();
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 6: Copy Constructor (OCF)" << std::endl;
 	std::cout << "========================================" << std::endl;
-	ScavTrap scavCopy(scav);
+	FragTrap fragCopy(frag);
 	std::cout << "Original attacks:" << std::endl;
-	scav.attack("Target1");
+	frag.attack("Target1");
 	std::cout << "Copy attacks:" << std::endl;
-	scavCopy.attack("Target2");
-	scavCopy.guardGate();
+	fragCopy.attack("Target2");
+	fragCopy.highFivesGuys();
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 7: Assignment Operator (OCF)" << std::endl;
 	std::cout << "========================================" << std::endl;
-	ScavTrap scavAssign("AssignTest");
+	FragTrap fragAssign("AssignTest");
 	std::cout << "Before assignment:" << std::endl;
-	scavAssign.attack("Target");
-	scavAssign = scav;
+	fragAssign.attack("Target");
+	fragAssign = frag;
 	std::cout << "After assignment:" << std::endl;
-	scavAssign.attack("Target");
+	fragAssign.attack("Target");
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 8: Energy Depletion (50 EP)" << std::endl;
+	std::cout << "   TEST 8: Energy Depletion (100 EP)" << std::endl;
 	std::cout << "========================================" << std::endl;
 	{
-		ScavTrap tired("Tired");
+		FragTrap tired("Tired");
 		std::cout << std::endl;
-		std::cout << "Using all 50 energy points..." << std::endl;
-		for (int i = 0; i < 50; i++) {
+		std::cout << "Using all 100 energy points..." << std::endl;
+		for (int i = 0; i < 100; i++) {
 			tired.attack("Target");
 		}
 		std::cout << std::endl;
@@ -82,7 +82,7 @@ int main() {
 	std::cout << "   TEST 9: HP Depletion (Lethal Damage)" << std::endl;
 	std::cout << "========================================" << std::endl;
 	{
-		ScavTrap victim("Victim");
+		FragTrap victim("Victim");
 		std::cout << std::endl;
 		victim.takeDamage(50);
 		victim.takeDamage(50);
@@ -96,33 +96,33 @@ int main() {
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 10: ClapTrap vs ScavTrap" << std::endl;
+	std::cout << "   TEST 10: ClapTrap vs FragTrap" << std::endl;
 	std::cout << "========================================" << std::endl;
 	{
 		ClapTrap clap("ClapTest");
-		ScavTrap scavTest("ScavTest");
+		FragTrap fragTest("FragTest");
 		std::cout << std::endl;
 		std::cout << "ClapTrap attacks (AD=0):" << std::endl;
 		clap.attack("Target");
-		std::cout << "ScavTrap attacks (AD=20):" << std::endl;
-		scavTest.attack("Target");
+		std::cout << "FragTrap attacks (AD=30):" << std::endl;
+		fragTest.attack("Target");
 		std::cout << std::endl;
 	}
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
-	std::cout << "   TEST 11: Multiple ScavTraps" << std::endl;
+	std::cout << "   TEST 11: Multiple FragTraps" << std::endl;
 	std::cout << "========================================" << std::endl;
 	{
-		ScavTrap s1("Alpha");
-		ScavTrap s2("Beta");
-		ScavTrap s3("Gamma");
+		FragTrap f1("Alpha");
+		FragTrap f2("Beta");
+		FragTrap f3("Gamma");
 		std::cout << std::endl;
-		s1.attack("Beta");
-		s2.takeDamage(20);
-		s2.attack("Gamma");
-		s3.takeDamage(20);
-		s3.guardGate();
+		f1.attack("Beta");
+		f2.takeDamage(30);
+		f2.attack("Gamma");
+		f3.takeDamage(30);
+		f3.highFivesGuys();
 		std::cout << std::endl;
 	}
 	std::cout << std::endl;
@@ -130,9 +130,9 @@ int main() {
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 12: Destruction Chain" << std::endl;
 	std::cout << "========================================" << std::endl;
-	std::cout << "Destruction order: ScavTrap -> ClapTrap" << std::endl;
+	std::cout << "Destruction order: FragTrap -> ClapTrap" << std::endl;
 	{
-		ScavTrap temp("TempScav");
+		FragTrap temp("TempFrag");
 		std::cout << "--- Scope ending ---" << std::endl;
 	}
 	std::cout << std::endl;
@@ -140,9 +140,9 @@ int main() {
 	std::cout << "========================================" << std::endl;
 	std::cout << "   TEST 13: Default Constructor" << std::endl;
 	std::cout << "========================================" << std::endl;
-	ScavTrap defaultScav;
-	defaultScav.attack("Target");
-	defaultScav.guardGate();
+	FragTrap defaultFrag;
+	defaultFrag.attack("Target");
+	defaultFrag.highFivesGuys();
 	std::cout << std::endl;
 
 	std::cout << "========================================" << std::endl;
