@@ -51,10 +51,14 @@ void Harl::complain(std::string level)
 void Harl::filterComplain(std::string level)
 {
     int levelIndex = -1;
-    if (level == "DEBUG") levelIndex = 0;
-    else if (level == "INFO") levelIndex = 1;
-    else if (level == "WARNING") levelIndex = 2;
-    else if (level == "ERROR") levelIndex = 3;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (_map[i].name == level)
+        {
+            levelIndex = i;
+            break;
+        }
+    }
 
     switch (levelIndex)
     {
