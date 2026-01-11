@@ -22,4 +22,9 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re
+abstract:
+	@echo "Testing if Animal can be instantiated..."
+	@echo 'int main() { Animal a; return 0; }' | $(CXX) $(CXXFLAGS) -I. -include Animal.hpp -x c++ - Animal.cpp -o /tmp/test_animal 2>&1 && echo "Animal CAN be instantiated (not abstract)" || echo "Animal CANNOT be instantiated (abstract class)"
+	@rm -f /tmp/test_animal
+
+.PHONY: all clean fclean re abstract
