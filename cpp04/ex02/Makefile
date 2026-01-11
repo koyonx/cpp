@@ -23,9 +23,8 @@ fclean: clean
 re: fclean all
 
 abstract:
-	@echo "Testing that Animal cannot be instantiated..."
-	@echo 'int main() { Animal a; return 0; }' | $(CXX) $(CXXFLAGS) -I. -include Animal.hpp -x c++ - 2>&1 || true
-	@echo ""
-	@echo "If you see an error above, the abstract class is working correctly!"
+	@echo "Testing if Animal can be instantiated..."
+	@echo 'int main() { Animal a; return 0; }' | $(CXX) $(CXXFLAGS) -I. -include Animal.hpp -x c++ - Animal.cpp -o /tmp/test_animal 2>&1 && echo "Animal CAN be instantiated (not abstract)" || echo "Animal CANNOT be instantiated (abstract class)"
+	@rm -f /tmp/test_animal
 
 .PHONY: all clean fclean re abstract
