@@ -2,8 +2,7 @@
 #define ANIMAL_HPP
 
 #include <iostream>
-#include "Dog.hpp"
-#include "Cat.hpp"
+#include <string>
 
 class Animal
 {
@@ -12,6 +11,7 @@ protected:
 
 public:
 	Animal();
+	Animal(std::string type);
 	Animal(const Animal& other);
 	virtual ~Animal();
 	Animal& operator=(const Animal& other);
