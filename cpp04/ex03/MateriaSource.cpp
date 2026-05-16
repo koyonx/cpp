@@ -43,6 +43,10 @@ MateriaSource& MateriaSource::operator=(const MateriaSource& other)
 	return *this;
 }
 
+// Subject: "Copies the Materia passed as a parameter and stores it in memory
+// so it can be cloned later."  We clone the input and take ownership of it
+// in both successful and over-capacity paths, so the caller never has to
+// worry about leaking the pointer it just passed in.
 void MateriaSource::learnMateria(AMateria* m)
 {
 	if (!m)
@@ -51,10 +55,12 @@ void MateriaSource::learnMateria(AMateria* m)
 	{
 		if (!storage[i])
 		{
-			storage[i] = m;
+			storage[i] = m->clone();
+			delete m;
 			return;
 		}
 	}
+	delete m;
 }
 
 AMateria* MateriaSource::createMateria(std::string const & type)

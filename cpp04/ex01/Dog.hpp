@@ -15,6 +15,10 @@ public:
 	virtual ~Dog();
 	Dog& operator=(const Dog& other);
 	void makeSound() const;
+
+	const Brain* getBrain() const;
+	void setIdea(int index, const std::string& idea);
+	const std::string& getIdea(int index) const;
 };
 
 #endif
