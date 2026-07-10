@@ -299,6 +299,213 @@ static void runTests() {
 		expect(true, "no crash after 10000 iterations");
 	}
 
+	// === 17. 科学記法 (double) ===
+	section("17. scientific notation - double");
+	{
+		std::string out = captureConvert("1e2");
+		expect(contains(out, "int: 100"), "1e2 int");
+		expect(contains(out, "double: 100.0"), "1e2 double");
+	}
+	{
+		std::string out = captureConvert("1.5e3");
+		expect(contains(out, "int: 1500"), "1.5e3 int");
+	}
+	{
+		std::string out = captureConvert("1E5");
+		expect(contains(out, "int: 100000"), "1E5 (uppercase) int");
+	}
+	{
+		std::string out = captureConvert("-1e3");
+		expect(contains(out, "int: -1000"), "-1e3 int");
+	}
+
+	// === 18. 科学記法 (float 'f' suffix) ===
+	section("18. scientific notation - float");
+	{
+		std::string out = captureConvert("1e2f");
+		expect(contains(out, "float: 100.0f"), "1e2f float");
+	}
+	{
+		std::string out = captureConvert("2.5e2f");
+		expect(contains(out, "float: 250.0f"), "2.5e2f float");
+	}
+
+	// === 19. 正符号リテラル ===
+	section("19. leading + sign literals");
+	{
+		std::string out = captureConvert("+42");
+		expect(contains(out, "int: 42"), "+42 int");
+		expect(contains(out, "char: '*'"), "+42 char");
+	}
+	{
+		std::string out = captureConvert("+4.2");
+		expect(contains(out, "double: 4.2"), "+4.2 double");
+	}
+	{
+		std::string out = captureConvert("+4.2f");
+		expect(contains(out, "float: 4.2f"), "+4.2f float");
+	}
+
+	// === 20. 全 printable ASCII 文字が正しく識別される (32..126) ===
+	section("20. all printable ASCII chars roundtrip");
+	{
+		bool ok = true;
+		for (int i = 32; i <= 126; ++i) {
+			// 数字は int 扱いなのでスキップ
+			if (i >= '0' && i <= '9') continue;
+			std::string s(1, static_cast<char>(i));
+			std::string out = captureConvert(s);
+			std::ostringstream expect_char;
+			expect_char << "char: '" << static_cast<char>(i) << "'";
+			std::ostringstream expect_int;
+			expect_int << "int: " << i;
+			if (!contains(out, expect_char.str()) || !contains(out, expect_int.str())) {
+				ok = false;
+				break;
+			}
+		}
+		expect(ok, "all 85 non-digit printable chars round-trip correctly");
+	}
+
+	// === 21. Truncation semantics: 42.9 → int 42, -4.9 → -4 ===
+	section("21. int conversion uses truncation (toward zero)");
+	{
+		std::string out = captureConvert("42.9");
+		expect(contains(out, "int: 42"), "42.9 -> int 42 (truncated)");
+	}
+	{
+		std::string out = captureConvert("42.9f");
+		expect(contains(out, "int: 42"), "42.9f -> int 42");
+	}
+	{
+		std::string out = captureConvert("-4.9");
+		expect(contains(out, "int: -4"), "-4.9 -> int -4");
+	}
+	{
+		std::string out = captureConvert("0.9");
+		expect(contains(out, "int: 0"), "0.9 -> int 0");
+	}
+
+	// === 22. 冪等性: 同じ入力で同じ出力 ===
+	section("22. determinism: same input -> same output");
+	{
+		std::string a = captureConvert("42.5");
+		std::string b = captureConvert("42.5");
+		std::string c = captureConvert("42.5");
+		expect(a == b && b == c, "3 consecutive calls produce identical output");
+	}
+
+	// === 23. 極端に小さい/大きい double ===
+	section("23. extreme double values");
+	{
+		std::string out = captureConvert("1e300");
+		expect(contains(out, "int: impossible"), "1e300 int impossible");
+		expect(contains(out, "float: +inff"), "1e300 float overflow to +inff");
+		expect(contains(out, "char: impossible"), "1e300 char impossible");
+	}
+	{
+		std::string out = captureConvert("-1e300");
+		expect(contains(out, "float: -inff"), "-1e300 float overflow");
+	}
+	{
+		std::string out = captureConvert("1e-40");
+		// 1e-40 は double では表現可能、float では subnormal or 0
+		expect(contains(out, "int: 0"), "1e-40 int is 0 (truncation)");
+	}
+
+	// === 24. 追加の無効入力パターン ===
+	section("24. additional invalid input patterns");
+	// 単一の非digit文字は char literal と解釈される (PDF: 'c', 'a', ... の仕様)
+	{
+		std::string out = captureConvert("+");
+		expect(contains(out, "char: '+'"), "'+' -> char '+' (single non-digit)");
+		expect(contains(out, "int: 43"), "'+' -> int 43");
+	}
+	{
+		std::string out = captureConvert("-");
+		expect(contains(out, "char: '-'"), "'-' -> char '-'");
+		expect(contains(out, "int: 45"), "'-' -> int 45");
+	}
+	// 複数文字の連続 sign はパース不能 -> impossible
+	{
+		std::string out = captureConvert("--42");
+		expect(contains(out, "impossible"), "'--42' invalid");
+	}
+	{
+		std::string out = captureConvert("++42");
+		expect(contains(out, "impossible"), "'++42' invalid");
+	}
+	{
+		std::string out = captureConvert("4..2");
+		expect(contains(out, "impossible"), "'4..2' invalid");
+	}
+	{
+		std::string out = captureConvert("42f");
+		expect(contains(out, "float: 42.0f"), "'42f' -> float (integer form + f)");
+	}
+
+	// === 25. Boundary int: INT_MAX と INT_MAX+1 の差 ===
+	section("25. int boundary: INT_MAX vs INT_MAX+1");
+	{
+		std::string out = captureConvert("2147483646");
+		expect(contains(out, "int: 2147483646"), "INT_MAX-1 valid");
+	}
+	{
+		std::string out = captureConvert("2147483647");
+		expect(contains(out, "int: 2147483647"), "INT_MAX valid");
+	}
+	{
+		std::string out = captureConvert("2147483648");
+		expect(contains(out, "int: impossible"), "INT_MAX+1 -> impossible");
+	}
+
+	// === 26. PDF 例の 4 行厳密一致 (exact multi-line) ===
+	section("26. PDF example exact 4-line output");
+	{
+		std::string expected =
+			"char: Non displayable\n"
+			"int: 0\n"
+			"float: 0.0f\n"
+			"double: 0.0\n";
+		expect(captureConvert("0") == expected, "'0' exact 4-line output");
+	}
+	{
+		std::string expected =
+			"char: '*'\n"
+			"int: 42\n"
+			"float: 42.0f\n"
+			"double: 42.0\n";
+		expect(captureConvert("42.0f") == expected, "'42.0f' exact 4-line output");
+	}
+	{
+		std::string expected =
+			"char: impossible\n"
+			"int: impossible\n"
+			"float: nanf\n"
+			"double: nan\n";
+		expect(captureConvert("nan") == expected, "'nan' exact 4-line output");
+	}
+
+	// === 27. char 特殊: '0' vs 0 (digit は int 扱い、非digit-single は char) ===
+	section("27. digit vs non-digit single-char handling");
+	{
+		std::string out_digit = captureConvert("0");
+		expect(contains(out_digit, "int: 0"), "'0' parsed as int 0");
+		expect(contains(out_digit, "char: Non displayable"), "'0' -> ASCII 0 char");
+	}
+	{
+		std::string out_char = captureConvert("A");
+		expect(contains(out_char, "char: 'A'"), "'A' parsed as char 'A'");
+		expect(contains(out_char, "int: 65"), "'A' int 65");
+	}
+
+	// === 28. 入力に空白を含む: これらは無効 (strtod は先頭空白を skip するが suffix は不許可) ===
+	section("28. inputs with spaces: rejected as invalid");
+	{
+		std::string out = captureConvert("42 ");
+		expect(contains(out, "impossible"), "'42 ' (trailing space) invalid");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
