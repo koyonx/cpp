@@ -16,6 +16,35 @@ static void expect(bool cond, const std::string& what) {
 	else      { ++g_fail; std::cout << "  [FAIL] " << what << std::endl; }
 }
 
+// ctor/dtor/copy 回数を追跡するクラス (Array の内部管理を検証)
+static int g_ctor = 0;
+static int g_dtor = 0;
+static int g_copy = 0;
+static int g_assign = 0;
+
+class Counted {
+public:
+	int v;
+	Counted() : v(0) { ++g_ctor; }
+	Counted(int val) : v(val) { ++g_ctor; }
+	Counted(const Counted& o) : v(o.v) { ++g_copy; }
+	Counted& operator=(const Counted& o) { v = o.v; ++g_assign; return *this; }
+	~Counted() { ++g_dtor; }
+};
+
+// テスト用: Array<int> を値渡し (コピー発生) & 戻り値
+static Array<int> passByValue(Array<int> arg) {
+	// arg 内容を変更しても呼び出し側に影響しないことを確認
+	if (arg.size() > 0) arg[0] = -999;
+	return arg;
+}
+
+static Array<int> makeArray(unsigned int n) {
+	Array<int> a(n);
+	for (unsigned int i = 0; i < n; ++i) a[i] = static_cast<int>(i + 100);
+	return a;
+}
+
 #define MAX_VAL 750
 
 // ==== PDF (提供された) テストコードを関数化 ====
@@ -315,6 +344,175 @@ int main(int, char**) {
 		Array<int> dst;
 		dst = src;
 		expect(dst.size() == 5, "empty -> resized");
+	}
+
+	// === 26. カスタム class T: Array<Counted>(n) は n 個 ctor + n 個 dtor ===
+	section("26. Array<Counted>(n) constructs and destroys exactly n times");
+	{
+		g_ctor = g_dtor = g_copy = g_assign = 0;
+		{
+			Array<Counted> arr(5);
+			expect(g_ctor == 5, "5 ctors on construction");
+			expect(g_dtor == 0, "0 dtors yet");
+		}
+		expect(g_dtor == 5, "5 dtors on destruction");
+	}
+
+	// === 27. Copy ctor: default-init n 個 + assign n 個 ===
+	// (実装: _data = new T[n]() → 4 default ctor, その後ループで operator= → 4 assign)
+	section("27. Array<Counted> copy ctor: n default ctors + n assigns");
+	{
+		g_ctor = g_dtor = g_copy = g_assign = 0;
+		{
+			Array<Counted> orig(4);
+			int ctor_before_copy = g_ctor;
+			Array<Counted> cpy(orig);
+			expect(g_ctor == ctor_before_copy + 4, "4 new default ctors for new[] allocation");
+			expect(g_assign == 4, "4 copy assigns to fill new[] from source");
+		}
+		expect(g_dtor == 8, "8 dtors (both arrays destroyed)");
+	}
+
+	// === 28. 関数への値渡し: コピー発生・呼び出し元は変更されない ===
+	section("28. pass Array by value -> caller not modified");
+	{
+		Array<int> orig(3);
+		orig[0] = 10; orig[1] = 20; orig[2] = 30;
+		Array<int> result = passByValue(orig);
+		expect(orig[0] == 10, "orig[0] unchanged (was 10)");
+		expect(result[0] == -999, "returned array has modified value");
+		expect(orig[1] == 20 && orig[2] == 30, "orig[1,2] unchanged");
+	}
+
+	// === 29. Return by value from function ===
+	section("29. return Array<int> by value from function");
+	{
+		Array<int> r = makeArray(5);
+		expect(r.size() == 5, "returned array size 5");
+		expect(r[0] == 100 && r[4] == 104, "returned array values");
+	}
+
+	// === 30. Array<char> ===
+	section("30. Array<char>");
+	{
+		Array<char> a(5);
+		a[0] = 'H'; a[1] = 'e'; a[2] = 'l'; a[3] = 'l'; a[4] = 'o';
+		expect(a[0] == 'H' && a[4] == 'o', "Array<char> works");
+	}
+
+	// === 31. Array<bool> ===
+	section("31. Array<bool>");
+	{
+		Array<bool> a(4);
+		expect(a[0] == false && a[3] == false, "bool default false");
+		a[0] = true; a[2] = true;
+		expect(a[0] == true && a[1] == false && a[2] == true && a[3] == false, "bool set/get");
+	}
+
+	// === 32. Chained subscript operations ===
+	section("32. chained subscript operations");
+	{
+		Array<int> a(3);
+		a[0] = 10;
+		a[0]++;
+		++a[0];
+		a[0] += 3;
+		expect(a[0] == 15, "10 -> 11 -> 12 -> 15");
+	}
+
+	// === 33. Very large array (100,000 int) ===
+	section("33. very large Array<int> (100,000 elements)");
+	{
+		Array<int> a(100000);
+		for (unsigned int i = 0; i < 100000; ++i) a[i] = static_cast<int>(i);
+		bool ok = true;
+		for (unsigned int i = 0; i < 100000; ++i)
+			if (a[i] != static_cast<int>(i)) { ok = false; break; }
+		expect(ok, "100000 elements set/get correctly");
+		expect(a.size() == 100000, "size == 100000");
+	}
+
+	// === 34. what() メッセージが期待通り ===
+	section("34. OutOfBoundsException::what() returns expected message");
+	{
+		Array<int> a(3);
+		try { a[5] = 0; }
+		catch (const std::exception& e) {
+			std::string msg = e.what();
+			expect(msg.find("out of bounds") != std::string::npos,
+			       "what() message contains 'out of bounds'");
+		}
+	}
+
+	// === 35. 同じ Array で複数回 exception cycle → 状態保持 ===
+	section("35. multiple exception cycles preserve Array state");
+	{
+		Array<int> a(3);
+		a[0] = 1; a[1] = 2; a[2] = 3;
+		for (int i = 0; i < 100; ++i) {
+			try { a[100] = 0; }
+			catch (const std::exception&) {}
+		}
+		expect(a[0] == 1 && a[1] == 2 && a[2] == 3, "state after 100 exceptions preserved");
+	}
+
+	// === 36. Const Array にも size() が呼べる ===
+	section("36. size() and const [] on const Array");
+	{
+		Array<int> src(5);
+		for (unsigned int i = 0; i < 5; ++i) src[i] = static_cast<int>(i * i);
+		const Array<int>& cref = src;
+		expect(cref.size() == 5, "size() on const ref");
+		expect(cref[3] == 9, "const [3] == 9");
+	}
+
+	// === 37. コピー独立性: source の各要素を全て変更しても copy は不変 ===
+	section("37. exhaustive copy independence");
+	{
+		Array<int> src(10);
+		for (unsigned int i = 0; i < 10; ++i) src[i] = static_cast<int>(i);
+		Array<int> cpy(src);
+		for (unsigned int i = 0; i < 10; ++i) src[i] = -1;
+		bool copy_intact = true;
+		for (unsigned int i = 0; i < 10; ++i)
+			if (cpy[i] != static_cast<int>(i)) { copy_intact = false; break; }
+		expect(copy_intact, "copy still has original 0..9");
+	}
+
+	// === 38. Custom class T + operator= 経由 ===
+	section("38. Array<Counted> operator= correctness");
+	{
+		g_ctor = g_dtor = g_copy = g_assign = 0;
+		{
+			Array<Counted> src(3);
+			Array<Counted> dst(5);
+			dst = src;
+			expect(dst.size() == 3, "size updated to 3");
+		}
+		expect(g_ctor + g_copy == g_dtor,
+		       "total constructions (ctor + copy) equals destructions");
+	}
+
+	// === 39. Consecutive assignment chain ===
+	section("39. consecutive operator= chain");
+	{
+		Array<int> a(2), b(3), c(4);
+		c[0] = 100;
+		b = c;
+		a = b;
+		expect(a.size() == 4 && b.size() == 4 && a[0] == 100, "chain a=b=c");
+	}
+
+	// === 40. Fast throw: 10,000 out-of-bounds catches ===
+	section("40. 10,000 out-of-bounds catch cycles (leak safety)");
+	{
+		Array<int> a(3);
+		int caught = 0;
+		for (int i = 0; i < 10000; ++i) {
+			try { a[100] = 0; }
+			catch (const std::exception&) { ++caught; }
+		}
+		expect(caught == 10000, "all 10000 exceptions caught");
 	}
 
 	// SUMMARY
