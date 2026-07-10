@@ -300,6 +300,248 @@ int main() {
 		expect(sp.shortestSpan() == 10 && sp.longestSpan() == 20, "deque range added");
 	}
 
+	// === 25. C-style array を addNumbers に渡す ===
+	section("25. addNumbers with C-style array via pointer iterators");
+	{
+		Span sp(5);
+		int arr[] = {100, 50, 200, 25, 300};
+		sp.addNumbers(arr, arr + 5);
+		expect(sp.size() == 5, "5 elements added");
+		expect(sp.longestSpan() == 275, "300 - 25 == 275");
+		expect(sp.shortestSpan() == 25, "50 - 25 == 25 shortest");
+	}
+
+	// === 26. addNumber を throw させても state 保持 ===
+	section("26. failed addNumber preserves state");
+	{
+		Span sp(2);
+		sp.addNumber(10);
+		sp.addNumber(20);
+		int shortest_before = sp.shortestSpan();
+		try { sp.addNumber(30); }
+		catch (const std::exception&) {}
+		expect(sp.size() == 2, "size still 2 after failed add");
+		expect(sp.shortestSpan() == shortest_before, "computation still same");
+	}
+
+	// === 27. addNumber と addNumbers の混在 ===
+	section("27. mixed addNumber + addNumbers");
+	{
+		Span sp(5);
+		sp.addNumber(1);
+		std::vector<int> mid;
+		mid.push_back(2); mid.push_back(3);
+		sp.addNumbers(mid.begin(), mid.end());
+		sp.addNumber(4);
+		sp.addNumber(5);
+		expect(sp.size() == 5, "5 elements");
+		expect(sp.shortestSpan() == 1, "consecutive -> 1");
+		expect(sp.longestSpan() == 4, "5 - 1 == 4");
+	}
+
+	// === 28. shortest/longest 呼び出し冪等 ===
+	section("28. shortest/longest calls are idempotent");
+	{
+		Span sp(10);
+		for (int i = 0; i < 10; ++i) sp.addNumber(i * 3);
+		int s1 = sp.shortestSpan();
+		int s2 = sp.shortestSpan();
+		int l1 = sp.longestSpan();
+		int l2 = sp.longestSpan();
+		expect(s1 == s2 && l1 == l2, "results deterministic across calls");
+	}
+
+	// === 29. Reverse order の値: shortest はソート後に決定 ===
+	section("29. reverse-ordered values: shortest computed on sorted");
+	{
+		Span sp(5);
+		sp.addNumber(50);
+		sp.addNumber(40);
+		sp.addNumber(30);
+		sp.addNumber(20);
+		sp.addNumber(10);
+		expect(sp.shortestSpan() == 10, "sorted min diff == 10");
+		expect(sp.longestSpan() == 40, "50 - 10 == 40");
+	}
+
+	// === 30. Full 状態でも shortest/longest は動く ===
+	section("30. full Span can still compute spans");
+	{
+		Span sp(3);
+		sp.addNumber(1); sp.addNumber(2); sp.addNumber(3);
+		expect(sp.shortestSpan() == 1, "full: shortest works");
+		expect(sp.longestSpan() == 2, "full: longest works");
+	}
+
+	// === 31. 巨大な値の shortest (both positive edge) ===
+	section("31. large positive values shortest");
+	{
+		Span sp(3);
+		sp.addNumber(1000000);
+		sp.addNumber(1000001);
+		sp.addNumber(2000000);
+		expect(sp.shortestSpan() == 1, "1M -> 1M+1 == diff 1");
+		expect(sp.longestSpan() == 1000000, "1M diff");
+	}
+
+	// === 32. Only-negative values ===
+	section("32. all negative values");
+	{
+		Span sp(4);
+		sp.addNumber(-1000);
+		sp.addNumber(-500);
+		sp.addNumber(-100);
+		sp.addNumber(-1);
+		expect(sp.longestSpan() == 999, "-1000 to -1 == 999");
+		expect(sp.shortestSpan() == 99, "smallest diff -100 to -1 == 99");
+	}
+
+	// === 33. addNumbers with mixed containers concatenated ===
+	section("33. addNumbers called multiple times");
+	{
+		Span sp(6);
+		std::vector<int> v1; v1.push_back(1); v1.push_back(2);
+		std::vector<int> v2; v2.push_back(10); v2.push_back(20);
+		std::list<int> l3; l3.push_back(100); l3.push_back(200);
+		sp.addNumbers(v1.begin(), v1.end());
+		sp.addNumbers(v2.begin(), v2.end());
+		sp.addNumbers(l3.begin(), l3.end());
+		expect(sp.size() == 6, "6 total elements");
+		expect(sp.longestSpan() == 199, "200 - 1 == 199");
+	}
+
+	// === 34. Copy 経由の同一性: shortest/longest 一致 ===
+	section("34. copy preserves shortest/longest values");
+	{
+		Span a(5);
+		for (int i = 0; i < 5; ++i) a.addNumber(i * 7);
+		Span b(a);
+		expect(a.shortestSpan() == b.shortestSpan(), "shortest match");
+		expect(a.longestSpan() == b.longestSpan(), "longest match");
+	}
+
+	// === 35. operator= chain ===
+	section("35. operator= chain a = b = c");
+	{
+		Span a(5), b(5), c(5);
+		for (int i = 0; i < 3; ++i) c.addNumber(i);
+		a = b = c;
+		expect(a.size() == 3 && b.size() == 3, "all size 3");
+		expect(a.shortestSpan() == b.shortestSpan(), "shortest match after chain");
+	}
+
+	// === 36. shortestSpan/longestSpan は const method ===
+	section("36. shortest/longest are const-callable");
+	{
+		Span sp(3);
+		sp.addNumber(1); sp.addNumber(2); sp.addNumber(3);
+		const Span& cref = sp;
+		expect(cref.shortestSpan() == 1, "const shortest");
+		expect(cref.longestSpan() == 2, "const longest");
+		expect(cref.size() == 3, "const size");
+		expect(cref.capacity() == 3, "const capacity");
+	}
+
+	// === 37. Very large: 1,000,000 elements ===
+	section("37. Span with 1,000,000 elements (extreme)");
+	{
+		Span sp(1000000);
+		std::vector<int> src;
+		src.reserve(1000000);
+		for (int i = 0; i < 1000000; ++i) src.push_back(i);
+		sp.addNumbers(src.begin(), src.end());
+		expect(sp.size() == 1000000, "1M elements added");
+		expect(sp.shortestSpan() == 1, "consecutive -> 1");
+		expect(sp.longestSpan() == 999999, "1M - 1");
+	}
+
+	// === 38. Same Span reused across capacity ===
+	section("38. Span assignment to different capacity");
+	{
+		Span original(3);
+		original.addNumber(10); original.addNumber(20); original.addNumber(30);
+		Span target(100);
+		for (int i = 0; i < 50; ++i) target.addNumber(i);
+		target = original;
+		expect(target.size() == 3 && target.capacity() == 3, "target now = original");
+		expect(target.longestSpan() == 20, "target longest = 20");
+	}
+
+	// === 39. addNumbers 空 range 何度呼んでも no-op ===
+	section("39. multiple empty addNumbers calls are no-op");
+	{
+		Span sp(3);
+		sp.addNumber(1);
+		std::vector<int> empty_src;
+		for (int i = 0; i < 100; ++i) {
+			sp.addNumbers(empty_src.begin(), empty_src.end());
+		}
+		expect(sp.size() == 1, "size still 1 after 100 empty adds");
+	}
+
+	// === 40. shortestSpan 2要素 ===
+	section("40. shortestSpan with exactly 2 identical elements");
+	{
+		Span sp(2);
+		sp.addNumber(5); sp.addNumber(5);
+		expect(sp.shortestSpan() == 0, "identical -> 0");
+		expect(sp.longestSpan() == 0, "identical -> 0");
+	}
+
+	// === 41. shortestSpan sorted vs random order 一致 ===
+	section("41. shortestSpan is order-independent (sorted vs shuffled input)");
+	{
+		Span sorted(5);
+		Span shuffled(5);
+		sorted.addNumber(1); sorted.addNumber(2); sorted.addNumber(4);
+		sorted.addNumber(7); sorted.addNumber(11);
+		shuffled.addNumber(7); shuffled.addNumber(1); shuffled.addNumber(11);
+		shuffled.addNumber(2); shuffled.addNumber(4);
+		expect(sorted.shortestSpan() == shuffled.shortestSpan(), "shortest equal");
+		expect(sorted.longestSpan() == shuffled.longestSpan(), "longest equal");
+	}
+
+	// === 42. Deep sequential lifecycle ===
+	section("42. sequential lifecycle: add -> compute -> more -> compute");
+	{
+		Span sp(10);
+		sp.addNumber(1); sp.addNumber(100);
+		int l1 = sp.longestSpan();
+		sp.addNumber(50);
+		int l2 = sp.longestSpan();
+		sp.addNumber(1000);
+		int l3 = sp.longestSpan();
+		expect(l1 == 99, "1 to 100 -> 99");
+		expect(l2 == 99, "1 to 100 still -> 99");
+		expect(l3 == 999, "1 to 1000 -> 999");
+	}
+
+	// === 43. Full Span への追加 → throw 後 state 完全維持 ===
+	section("43. full Span throws + state fully preserved");
+	{
+		Span sp(3);
+		sp.addNumber(10); sp.addNumber(20); sp.addNumber(30);
+		int prev_short = sp.shortestSpan();
+		int prev_long = sp.longestSpan();
+		for (int i = 0; i < 100; ++i) {
+			try { sp.addNumber(999); }
+			catch (const std::exception&) {}
+		}
+		expect(sp.size() == 3, "size still 3 after 100 fail adds");
+		expect(sp.shortestSpan() == prev_short, "shortest unchanged");
+		expect(sp.longestSpan() == prev_long, "longest unchanged");
+	}
+
+	// === 44. addNumbers 自身への iterator は unsafe だがテストしない ===
+	section("44. addNumbers with vector<int>::iterator external safe");
+	{
+		Span sp(5);
+		std::vector<int> src;
+		src.push_back(1); src.push_back(3); src.push_back(5); src.push_back(7); src.push_back(9);
+		sp.addNumbers(src.begin(), src.end());
+		expect(sp.size() == 5, "5 added");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
