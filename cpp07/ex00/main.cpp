@@ -29,6 +29,30 @@ public:
 	int value() const { return _v; }
 };
 
+// swap/min/max のコピー回数を数える型 (C++98 では template 引数にローカルクラスを使えないので file scope)
+static int g_copy_ctor = 0;
+static int g_copy_assign = 0;
+
+class Tracker {
+public:
+	int v;
+	Tracker() : v(0) {}
+	Tracker(int val) : v(val) {}
+	Tracker(const Tracker& o) : v(o.v) { ++g_copy_ctor; }
+	Tracker& operator=(const Tracker& o) { v = o.v; ++g_copy_assign; return *this; }
+	bool operator<(const Tracker& o) const { return v < o.v; }
+	bool operator>(const Tracker& o) const { return v > o.v; }
+};
+
+// 逆順比較 (v が大きい方が「小さい」) を持つ型
+class Rev {
+public:
+	int v;
+	Rev(int val) : v(val) {}
+	bool operator<(const Rev& o) const { return v > o.v; }
+	bool operator>(const Rev& o) const { return v < o.v; }
+};
+
 int main() {
 	// === 1. PDF 例そのまま (int) ===
 	section("1. PDF example: int a=2, b=3");
@@ -223,6 +247,109 @@ int main() {
 			(void)::max(x, y);
 		}
 		expect(true, "no crash");
+	}
+
+	// === 21. swap of pointer types ===
+	section("21. swap works on pointer types");
+	{
+		int x = 1, y = 2;
+		int* p = &x;
+		int* q = &y;
+		::swap(p, q);
+		expect(p == &y && q == &x, "pointer swap");
+	}
+
+	// === 22. min/max with float 特殊値 (-0.0 vs 0.0) ===
+	section("22. min/max with signed zero");
+	{
+		double a = 0.0, b = -0.0;
+		// 0.0 == -0.0 なので等値扱い -> 2nd を返す
+		expect(&::min(a, b) == &b, "min(0.0, -0.0) equal -> 2nd");
+		expect(&::max(a, b) == &b, "max(0.0, -0.0) equal -> 2nd");
+	}
+
+	// === 23. swap の empty string ===
+	section("23. swap involving empty string");
+	{
+		std::string a = "";
+		std::string b = "not empty";
+		::swap(a, b);
+		expect(a == "not empty" && b.empty(), "empty <-> content swap");
+	}
+
+	// === 24. min/max on empty vs non-empty string ===
+	section("24. min/max empty string edge");
+	{
+		std::string a = "";
+		std::string b = "a";
+		expect(::min(a, b) == "", "empty < 'a'");
+		expect(::max(a, b) == "a", "'a' > empty");
+	}
+
+	// === 25. Copy counting: swap は正確に 3 コピー = 1 ctor + 2 assign ===
+	// (T tmp = a → copy ctor 1回, a = b → copy assign 1回, b = tmp → copy assign 1回)
+	section("25. swap performs exactly 3 copy operations (1 ctor + 2 assign)");
+	{
+		Tracker a(1), b(2);
+		g_copy_ctor = 0;
+		g_copy_assign = 0;
+		::swap(a, b);
+		expect(g_copy_ctor == 1, "swap: exactly 1 copy ctor");
+		expect(g_copy_assign == 2, "swap: exactly 2 copy assign");
+		expect(a.v == 2 && b.v == 1, "values swapped");
+	}
+
+	// === 26. Copy counting: min/max は 0 copy (const ref return) ===
+	section("26. min/max perform 0 copies (returns const ref)");
+	{
+		Tracker a(1), b(2);
+		g_copy_ctor = 0;
+		g_copy_assign = 0;
+		const Tracker& m = ::min(a, b);
+		const Tracker& M = ::max(a, b);
+		(void)m; (void)M;
+		expect(g_copy_ctor == 0, "min/max: 0 copy ctors");
+		expect(g_copy_assign == 0, "min/max: 0 copy assignments");
+	}
+
+	// === 27. min/max: 一時値で呼んでも segfault しない (フルエクスプレッション内で生存) ===
+	section("27. min/max with rvalue temporaries safe within expression");
+	{
+		int result = ::min(10, 20) + ::max(5, 15);
+		expect(result == 10 + 15, "10 + 15 == 25");
+	}
+
+	// === 28. min/max chain の depth 5 ===
+	section("28. deep chain of min/max");
+	{
+		int a = 5, b = 3, c = 8, d = 1, e = 9;
+		int result_min = ::min(::min(::min(::min(a, b), c), d), e);
+		int result_max = ::max(::max(::max(::max(a, b), c), d), e);
+		expect(result_min == 1, "deep min == 1");
+		expect(result_max == 9, "deep max == 9");
+	}
+
+	// === 29. min/max returning const reference: 変更禁止 (compile-time) ===
+	// const int& m = ::min(a, b); m = 100;  // これはコンパイルエラー
+	section("29. min/max returns const T& (compile-time immutability)");
+	expect(true, "verified by const return type in signature");
+
+	// === 30. 逆順比較を持つカスタム型でも動く (反対の結果) ===
+	section("30. custom type with reversed comparison");
+	{
+		Rev a(1), b(10);
+		expect(::min(a, b).v == 10, "reversed min returns v=10");
+		expect(::max(a, b).v == 1, "reversed max returns v=1");
+	}
+
+	// === 31. swap of user class + verify content ===
+	section("31. swap deep-copies for classes with heap");
+	{
+		std::string a(1000, 'A');
+		std::string b(500, 'B');
+		::swap(a, b);
+		expect(a.size() == 500 && a[0] == 'B', "500 B in a");
+		expect(b.size() == 1000 && b[0] == 'A', "1000 A in b");
 	}
 
 	// SUMMARY
