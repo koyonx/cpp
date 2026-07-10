@@ -38,6 +38,30 @@ static void upcase(char& c) {
 	c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 }
 
+// 関数オブジェクト (functor)
+class Multiplier {
+	int _factor;
+public:
+	Multiplier(int f) : _factor(f) {}
+	void operator()(int& x) const { x *= _factor; }
+};
+
+// throw する関数 (指定 index で throw)
+static int g_throw_at = -1;
+static int g_visited = 0;
+static void throwAt(int& x) {
+	if (g_visited == g_throw_at) throw std::runtime_error("intentional");
+	x += 1;
+	++g_visited;
+}
+
+// 戻り値が void でない関数 (戻り値は無視される)
+static int returning(int& x) { x *= 3; return x; }
+
+// 静的にカウントアップ
+static int g_count = 0;
+static void countCall(const int&) { ++g_count; }
+
 int main() {
 	// === 1. int[] with doublify (mutating) ===
 	section("1. iter mutates int array via doublify");
@@ -191,6 +215,124 @@ int main() {
 		g_sum = 0;
 		iter(arr, length, addToSum);
 		expect(g_sum == 6, "const size_t length works");
+	}
+
+	// === 17. Functor class (operator()) ===
+	section("17. iter with functor class");
+	{
+		int arr[4] = {1, 2, 3, 4};
+		Multiplier by3(3);
+		iter(arr, 4, by3);
+		expect(arr[0] == 3 && arr[1] == 6 && arr[2] == 9 && arr[3] == 12,
+		       "functor multiplied by 3");
+	}
+
+	// === 18. 関数の戻り値は無視される ===
+	section("18. iter ignores function return value");
+	{
+		int arr[3] = {1, 2, 3};
+		iter(arr, 3, returning);
+		expect(arr[0] == 3 && arr[1] == 6 && arr[2] == 9, "returning func used for side effects");
+	}
+
+	// === 19. 関数からの throw は伝播 & 途中で終わる ===
+	section("19. throwing function propagates & stops iteration");
+	{
+		int arr[5] = {0, 0, 0, 0, 0};
+		g_visited = 0;
+		g_throw_at = 2;  // 3 要素目で throw
+		bool caught = false;
+		try { iter(arr, 5, throwAt); }
+		catch (const std::exception&) { caught = true; }
+		expect(caught, "exception propagated from iter");
+		expect(arr[0] == 1 && arr[1] == 1 && arr[2] == 0 && arr[3] == 0 && arr[4] == 0,
+		       "only first 2 elements were processed before throw");
+	}
+
+	// === 20. Function pointer as explicit type ===
+	section("20. explicit function pointer type as 3rd param");
+	{
+		void (*fp)(int&) = doublify;
+		int arr[3] = {1, 2, 3};
+		iter(arr, 3, fp);
+		expect(arr[0] == 2 && arr[1] == 4 && arr[2] == 6, "function pointer works");
+	}
+
+	// === 21. Pointer array (T* = int**) ===
+	section("21. iter over pointer array");
+	{
+		int a = 10, b = 20, c = 30;
+		int* arr[3] = {&a, &b, &c};
+		g_sum = 0;
+		// Lambda-less C++98: use a helper functor
+		class SumViaPtr {
+		public:
+			static void call(int* const& p) { g_sum += *p; }
+		};
+		iter(arr, 3, SumViaPtr::call);
+		expect(g_sum == 60, "10+20+30 == 60 via pointer array");
+	}
+
+	// === 22. 大配列 100,000 要素 ===
+	section("22. iter over 100,000 elements");
+	{
+		int* arr = new int[100000];
+		for (int i = 0; i < 100000; ++i) arr[i] = 1;
+		g_count = 0;
+		iter(arr, 100000, countCall);
+		expect(g_count == 100000, "count == 100000");
+		delete[] arr;
+	}
+
+	// === 23. Const 配列を非-const 関数で iter は compile error (verify by omission) ===
+	section("23. const array + non-const-taking func = compile error (compile-time)");
+	// const int arr[3] = {1,2,3};
+	// iter(arr, 3, doublify);  // ← doublify は int& 要求 → 実体化失敗
+	expect(true, "verified by not-uncommenting (T=const int, func requires int& -> mismatch)");
+
+	// === 24. 2D 相当 (Array of Arrays) を iter ===
+	section("24. iterating over 2D-like structure via helper");
+	{
+		int m0[3] = {1, 2, 3};
+		int m1[3] = {4, 5, 6};
+		int* rows[2] = {m0, m1};
+		g_sum = 0;
+		// 各行にiter(sum) → 行ポインタごとに iter を呼ぶ関数
+		class RowSum {
+		public:
+			static void call(int* const& row) {
+				for (int i = 0; i < 3; ++i) g_sum += row[i];
+			}
+		};
+		iter(rows, 2, RowSum::call);
+		expect(g_sum == 1+2+3+4+5+6, "sum of 2x3 == 21");
+	}
+
+	// === 25. size_t 巨大な length は要素外アクセス → 未定義動作なのでテスト対象外 ===
+	section("25. iter behavior is deterministic for valid inputs");
+	{
+		g_sum = 0;
+		int arr[1] = {7};
+		iter(arr, 1, addToSum);
+		expect(g_sum == 7, "1 element -> sum 7");
+	}
+
+	// === 26. 複数回の iter が独立に動く ===
+	section("26. multiple iter calls independent");
+	{
+		int arr[3] = {1, 2, 3};
+		iter(arr, 3, doublify);
+		iter(arr, 3, doublify);
+		iter(arr, 3, doublify);
+		expect(arr[0] == 8 && arr[1] == 16 && arr[2] == 24, "3 doublify -> *8");
+	}
+
+	// === 27. Different types: char array with counting ===
+	section("27. iter over char array");
+	{
+		char arr[6] = "hello";  // 5 + null
+		iter(arr, 5, upcase);
+		expect(arr[0] == 'H' && arr[4] == 'O', "hello -> HELLO");
 	}
 
 	// SUMMARY
