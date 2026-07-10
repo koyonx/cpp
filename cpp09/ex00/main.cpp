@@ -341,6 +341,210 @@ static int runTests() {
 		removeFile("/tmp/big_db.csv");
 	}
 
+	// === 18. 全月境界日付 (各月の 31日/30日/28日) ===
+	section("18. all-months boundary days");
+	{
+		// 1月31日 有効
+		expect(BitcoinExchange::isValidDate("2020-01-31"), "Jan 31 valid");
+		// 4月30日 有効, 31 無効
+		expect(BitcoinExchange::isValidDate("2020-04-30"), "Apr 30 valid");
+		expect(!BitcoinExchange::isValidDate("2020-04-31"), "Apr 31 invalid");
+		// 6月30日 有効
+		expect(BitcoinExchange::isValidDate("2020-06-30"), "Jun 30 valid");
+		expect(!BitcoinExchange::isValidDate("2020-06-31"), "Jun 31 invalid");
+		// 9月30日 有効
+		expect(BitcoinExchange::isValidDate("2020-09-30"), "Sep 30 valid");
+		expect(!BitcoinExchange::isValidDate("2020-09-31"), "Sep 31 invalid");
+		// 11月30日 有効
+		expect(BitcoinExchange::isValidDate("2020-11-30"), "Nov 30 valid");
+		expect(!BitcoinExchange::isValidDate("2020-11-31"), "Nov 31 invalid");
+	}
+
+	// === 19. 2月 leap year 完全網羅 ===
+	section("19. February leap year comprehensive");
+	{
+		// 4年周期のうるう年
+		expect(BitcoinExchange::isValidDate("2004-02-29"), "2004 leap");
+		expect(BitcoinExchange::isValidDate("2008-02-29"), "2008 leap");
+		// 100 の倍数は普通の年
+		expect(!BitcoinExchange::isValidDate("2100-02-29"), "2100 not leap (100 rule)");
+		expect(!BitcoinExchange::isValidDate("2200-02-29"), "2200 not leap");
+		// 400 の倍数はうるう年
+		expect(BitcoinExchange::isValidDate("2000-02-29"), "2000 leap (400 rule)");
+		expect(BitcoinExchange::isValidDate("2400-02-29"), "2400 leap");
+		// 通常年
+		expect(!BitcoinExchange::isValidDate("2001-02-29"), "2001 not leap");
+		expect(!BitcoinExchange::isValidDate("2019-02-29"), "2019 not leap");
+	}
+
+	// === 20. year=0 系 ===
+	section("20. year edge cases");
+	{
+		expect(!BitcoinExchange::isValidDate("0000-01-01"), "year 0000 rejected");
+		expect(BitcoinExchange::isValidDate("0001-01-01"), "year 0001 valid");
+		expect(BitcoinExchange::isValidDate("9999-12-31"), "year 9999 valid");
+	}
+
+	// === 21. parseValue: leading zeros / +符号 ===
+	section("21. parseValue: leading zeros, plus sign");
+	{
+		double v;
+		expect(BitcoinExchange::parseValue("007", v) && v == 7, "007 parsed as 7");
+		expect(BitcoinExchange::parseValue("+42", v) && v == 42, "+42 parsed");
+		expect(BitcoinExchange::parseValue("0.5", v) && v == 0.5, "0.5");
+		expect(BitcoinExchange::parseValue(".5", v) && v == 0.5, ".5 valid (strtod accepts)");
+	}
+
+	// === 22. parseValue: 特殊数値 ===
+	section("22. parseValue: special numeric forms");
+	{
+		double v;
+		expect(BitcoinExchange::parseValue("1e-2", v) && v > 0.009 && v < 0.011, "1e-2");
+		expect(BitcoinExchange::parseValue("1.5E10", v), "1.5E10 (uppercase E)");
+	}
+
+	// === 23. processInput: value == 0 は valid (境界) ===
+	section("23. value 0 is valid");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,100.0\n");
+		writeFile("/tmp/tin.txt", "date | value\n2020-01-01 | 0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		expect(contains(cap.out(), "2020-01-01 => 0 = 0"), "0 * 100 = 0");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 24. processInput: value = 1000 exact 境界 valid ===
+	section("24. value 1000 exact boundary valid");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,2.0\n");
+		writeFile("/tmp/tin.txt", "date | value\n2020-01-01 | 1000\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		expect(contains(cap.out(), "2020-01-01 => 1000 = 2000"), "1000 * 2 = 2000");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 25. processInput: 小数値 ===
+	section("25. fractional values");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,10.0\n");
+		writeFile("/tmp/tin.txt",
+			"date | value\n"
+			"2020-01-01 | 0.5\n"
+			"2020-01-01 | 3.14\n"
+			"2020-01-01 | 999.99\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		std::string out = cap.out();
+		expect(contains(out, "0.5"), "0.5 processed");
+		expect(contains(out, "3.14"), "3.14 processed");
+		expect(contains(out, "999.99"), "999.99 processed");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 26. 複数のクエリで DB が変わらない (immutability) ===
+	section("26. DB immutable across queries");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,50.0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		std::size_t sz0 = btc.dbSize();
+		for (int i = 0; i < 100; ++i) (void)btc.getRate("2020-01-01");
+		expect(btc.dbSize() == sz0, "size unchanged");
+		removeFile("/tmp/mock_db.csv");
+	}
+
+	// === 27. Header 判定: "date | value" 完全一致のみ header 扱い ===
+	section("27. header detection: 'date | value' only");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,10.0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		// header 行がない場合、1行目もデータとして処理される
+		writeFile("/tmp/tin.txt", "2020-01-01 | 5\n");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		expect(contains(cap.out(), "2020-01-01 => 5 = 50"), "1st line as data");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 28. 誤ったフォーマット (separator の類似) ===
+	section("28. wrong separators");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,10.0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		writeFile("/tmp/tin.txt",
+			"date | value\n"
+			"2020-01-01|5\n"       // 空白なし
+			"2020-01-01 |5\n"      // 前空白のみ
+			"2020-01-01| 5\n");    // 後空白のみ
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		std::string err = cap.err();
+		expect(err.find("bad input") != std::string::npos, "wrong separator format");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 29. 極端に近い日付 (連続日) ===
+	section("29. consecutive dates in DB");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2020-01-01,1.0\n"
+			"2020-01-02,2.0\n"
+			"2020-01-03,3.0\n"
+			"2020-01-04,4.0\n"
+			"2020-01-05,5.0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		expect(btc.getRate("2020-01-01") == 1.0, "day 1");
+		expect(btc.getRate("2020-01-02") == 2.0, "day 2");
+		expect(btc.getRate("2020-01-03") == 3.0, "day 3");
+		expect(btc.getRate("2020-01-04") == 4.0, "day 4");
+		expect(btc.getRate("2020-01-05") == 5.0, "day 5");
+		removeFile("/tmp/mock_db.csv");
+	}
+
+	// === 30. 月境界を跨ぐ日付 ===
+	section("30. month/year boundary crossing");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2019-12-31,100.0\n"
+			"2020-01-01,200.0\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		expect(btc.getRate("2019-12-31") == 100.0, "year end");
+		expect(btc.getRate("2020-01-01") == 200.0, "year start");
+		// 中間日はない
+		removeFile("/tmp/mock_db.csv");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
