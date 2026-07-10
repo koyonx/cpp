@@ -197,6 +197,148 @@ int main() {
 		expect(dynamic_cast<C*>(base) == NULL, "C* dynamic_cast fails on Base*(A)");
 	}
 
+	// === 14. Upcast (derived -> base) は常に成功 ===
+	section("14. dynamic_cast upcast (derived -> Base) always succeeds");
+	{
+		A a;
+		Base* b = dynamic_cast<Base*>(&a);
+		expect(b == static_cast<Base*>(&a), "Base* upcast from A*");
+	}
+	{
+		B b;
+		Base& ref = dynamic_cast<Base&>(b);
+		expect(&ref == static_cast<Base*>(&b), "Base& upcast from B&");
+	}
+	{
+		C c;
+		Base* p = dynamic_cast<Base*>(&c);
+		expect(p != NULL, "Base* upcast from C*");
+	}
+
+	// === 15. dynamic_cast の crosscast (B <-> C) は全部失敗 ===
+	section("15. dynamic_cast crosscast between siblings fails");
+	{
+		B b;
+		Base* base = &b;
+		expect(dynamic_cast<A*>(base) == NULL, "B -> A crosscast fails");
+		expect(dynamic_cast<C*>(base) == NULL, "B -> C crosscast fails");
+	}
+
+	// === 16. 同じオブジェクトを 100 回 identify → 同じ結果 ===
+	section("16. multiple identify calls return same result");
+	{
+		A a;
+		bool all_A = true;
+		for (int i = 0; i < 100; ++i) {
+			if (capturePtr(&a) != "A") { all_A = false; break; }
+			if (captureRef(a) != "A") { all_A = false; break; }
+		}
+		expect(all_A, "100 identify calls on same A -> always 'A'");
+	}
+
+	// === 17. Base* 配列 (mixed types) を identify ===
+	section("17. Base* array with mixed concrete types");
+	{
+		A a; B b; C c;
+		Base* arr[6] = { &a, &b, &c, &a, &b, &c };
+		const char* expected[6] = { "A", "B", "C", "A", "B", "C" };
+		bool ok = true;
+		for (int i = 0; i < 6; ++i) {
+			if (capturePtr(arr[i]) != expected[i]) { ok = false; break; }
+		}
+		expect(ok, "6-element mixed array identified correctly");
+	}
+
+	// === 18. Base* 配列 (heap allocated, delete via Base*) ===
+	section("18. heap-allocated mixed Base* array");
+	{
+		Base* arr[3];
+		arr[0] = new A();
+		arr[1] = new B();
+		arr[2] = new C();
+		expect(capturePtr(arr[0]) == "A", "heap A");
+		expect(capturePtr(arr[1]) == "B", "heap B");
+		expect(capturePtr(arr[2]) == "C", "heap C");
+		for (int i = 0; i < 3; ++i) delete arr[i];
+	}
+
+	// === 19. sizeof: A/B/C は空だが仮想テーブルポインタで sizeof(Base) と一致 ===
+	section("19. sizeof consistency (empty derived classes)");
+	{
+		expect(sizeof(A) == sizeof(Base), "sizeof(A) == sizeof(Base)");
+		expect(sizeof(B) == sizeof(Base), "sizeof(B) == sizeof(Base)");
+		expect(sizeof(C) == sizeof(Base), "sizeof(C) == sizeof(Base)");
+	}
+
+	// === 20. より大規模な統計テスト (5000 iter, tolerance ±300) ===
+	section("20. larger statistical distribution (5000 trials)");
+	{
+		int cA = 0, cB = 0, cC = 0;
+		for (int i = 0; i < 5000; ++i) {
+			Base* p = generate();
+			std::string t = capturePtr(p);
+			if      (t == "A") ++cA;
+			else if (t == "B") ++cB;
+			else if (t == "C") ++cC;
+			delete p;
+		}
+		expect(cA + cB + cC == 5000, "5000 total generates");
+		expect(cA >= 1400 && cA <= 2100, "A count in [1400,2100]");
+		expect(cB >= 1400 && cB <= 2100, "B count in [1400,2100]");
+		expect(cC >= 1400 && cC <= 2100, "C count in [1400,2100]");
+	}
+
+	// === 21. 100,000 gen/delete (extreme leak safety) ===
+	section("21. 100,000 generate/delete (extreme leak safety)");
+	{
+		for (int i = 0; i < 100000; ++i) {
+			Base* p = generate();
+			delete p;
+		}
+		expect(true, "no crash after 100,000 iterations");
+	}
+
+	// === 22. identify (both versions) via array of Base& からの参照束縛 ===
+	section("22. identify via reference-bound Base&");
+	{
+		A a; B b; C c;
+		Base& r1 = a;
+		Base& r2 = b;
+		Base& r3 = c;
+		expect(captureRef(r1) == "A" && captureRef(r2) == "B" && captureRef(r3) == "C",
+		       "3 references bound & identified");
+	}
+
+	// === 23. Base 自身のインスタンス経由: dynamic_cast は全て失敗 ===
+	// (Base b; dynamic_cast<A*>(&b) は compile-time に never-succeed 判定されるので
+	//  実行時に判定させるため new Base() を使う)
+	section("23. dynamic_cast on plain Base always fails to A/B/C");
+	{
+		Base* b = new Base();
+		expect(dynamic_cast<A*>(b) == NULL, "Base -> A* fails at runtime");
+		expect(dynamic_cast<B*>(b) == NULL, "Base -> B* fails at runtime");
+		expect(dynamic_cast<C*>(b) == NULL, "Base -> C* fails at runtime");
+		delete b;
+	}
+
+	// === 24. delete NULL は安全 (念のため) ===
+	section("24. delete NULL Base* is safe");
+	{
+		Base* p = NULL;
+		delete p;
+		expect(true, "delete NULL didn't crash");
+	}
+
+	// === 25. RTTI が有効: 仮想関数を持つのでdynamic_cast がコンパイル可能 ===
+	section("25. RTTI enabled (virtual dtor makes dynamic_cast well-formed)");
+	{
+		// これがコンパイルできること自体が RTTI 有効の証明
+		A a;
+		Base* base = &a;
+		A* recovered = dynamic_cast<A*>(base);
+		expect(recovered == &a, "dynamic_cast round-trips A -> Base -> A");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
