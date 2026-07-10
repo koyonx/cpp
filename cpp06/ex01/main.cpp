@@ -170,6 +170,152 @@ int main() {
 		delete heap;
 	}
 
+	// === 14. Data 配列: 各要素が distinct address ===
+	section("14. array of Data: each element has distinct address");
+	{
+		Data arr[5];
+		for (int i = 0; i < 5; ++i) {
+			arr[i].id = i * 10;
+			std::ostringstream nm; nm << "elem_" << i;
+			arr[i].name = nm.str();
+			arr[i].value = i * 1.5;
+		}
+		uintptr_t raws[5];
+		for (int i = 0; i < 5; ++i)
+			raws[i] = Serializer::serialize(&arr[i]);
+		// 隣接要素は sizeof(Data) 差
+		bool distinct = true;
+		for (int i = 1; i < 5; ++i)
+			if (raws[i] == raws[i - 1]) distinct = false;
+		expect(distinct, "5 array elements produce distinct uintptr_t");
+		// roundtrip 検証
+		bool restore_ok = true;
+		for (int i = 0; i < 5; ++i) {
+			Data* r = Serializer::deserialize(raws[i]);
+			if (r != &arr[i] || r->id != i * 10) { restore_ok = false; break; }
+		}
+		expect(restore_ok, "all 5 array elements restored to correct pointer + data");
+	}
+
+	// === 15. アドレス差分が sizeof(Data) の倍数 ===
+	section("15. array pointer arithmetic reflected in uintptr_t");
+	{
+		Data arr[3];
+		uintptr_t r0 = Serializer::serialize(&arr[0]);
+		uintptr_t r1 = Serializer::serialize(&arr[1]);
+		uintptr_t r2 = Serializer::serialize(&arr[2]);
+		expect(r1 - r0 == sizeof(Data), "arr[1] - arr[0] == sizeof(Data)");
+		expect(r2 - r0 == 2 * sizeof(Data), "arr[2] - arr[0] == 2 * sizeof(Data)");
+	}
+
+	// === 16. 大サイズ Data (長い string) ===
+	section("16. large Data with 10,000-char name");
+	{
+		Data d;
+		d.id = 1;
+		d.name = std::string(10000, 'X');
+		d.value = 42.0;
+		uintptr_t raw = Serializer::serialize(&d);
+		Data* r = Serializer::deserialize(raw);
+		expect(r == &d, "pointer preserved for large Data");
+		expect(r->name.size() == 10000, "10000-char name intact");
+		expect(r->name[9999] == 'X', "last char intact");
+	}
+
+	// === 17. 二重 serialize は同じ uintptr_t ===
+	section("17. serialize is deterministic on same pointer");
+	{
+		Data d;
+		uintptr_t a = Serializer::serialize(&d);
+		uintptr_t b = Serializer::serialize(&d);
+		uintptr_t c = Serializer::serialize(&d);
+		expect(a == b && b == c, "serialize(&d) always returns same value");
+	}
+
+	// === 18. Chained roundtrip: raw -> ptr -> raw -> ptr ... ===
+	section("18. chained roundtrip preserves identity");
+	{
+		Data d;
+		d.id = 999;
+		uintptr_t r1 = Serializer::serialize(&d);
+		Data* p1 = Serializer::deserialize(r1);
+		uintptr_t r2 = Serializer::serialize(p1);
+		Data* p2 = Serializer::deserialize(r2);
+		uintptr_t r3 = Serializer::serialize(p2);
+		Data* p3 = Serializer::deserialize(r3);
+		expect(r1 == r2 && r2 == r3, "raw values all equal through chain");
+		expect(p1 == p2 && p2 == p3 && p3 == &d, "pointers all equal to original");
+		expect(p3->id == 999, "data still intact");
+	}
+
+	// === 19. 全ゼロ初期化 Data ===
+	section("19. zero-initialized Data roundtrip");
+	{
+		Data d;
+		d.id = 0;
+		d.name = "";
+		d.value = 0.0;
+		uintptr_t raw = Serializer::serialize(&d);
+		Data* r = Serializer::deserialize(raw);
+		expect(r == &d, "zero-init pointer roundtrip");
+		expect(r->id == 0 && r->name.empty() && r->value == 0.0, "zero fields preserved");
+	}
+
+	// === 20. Data の負値・境界値 ===
+	section("20. Data with extreme field values");
+	{
+		Data d;
+		d.id = -2147483648;
+		d.name = "unicode 記号 !@#$%";
+		d.value = -1e300;
+		uintptr_t raw = Serializer::serialize(&d);
+		Data* r = Serializer::deserialize(raw);
+		expect(r->id == -2147483648, "INT_MIN id preserved");
+		expect(r->name == "unicode 記号 !@#$%", "unicode name preserved");
+		expect(r->value == -1e300, "extreme double preserved");
+	}
+
+	// === 21. deserialize の任意 uintptr_t 値 (規格保証は roundtrip 経由のみ) ===
+	section("21. deserialize handles arbitrary uintptr_t values");
+	{
+		Data d;
+		uintptr_t original = Serializer::serialize(&d);
+		// 逆算しても roundtrip 経由なら元に戻る
+		Data* r = Serializer::deserialize(original);
+		expect(r == &d, "arbitrary but roundtripped value restores correctly");
+	}
+
+	// === 22. serialize + deserialize は const Data* にも使える (再解釈のみ) ===
+	section("22. works with pointers on stack from function scope");
+	{
+		Data outer;
+		outer.id = 111;
+		{
+			Data inner;
+			inner.id = 222;
+			uintptr_t rout = Serializer::serialize(&outer);
+			uintptr_t rin = Serializer::serialize(&inner);
+			expect(rout != rin, "distinct addresses inside inner scope");
+			expect(Serializer::deserialize(rout)->id == 111, "outer accessible via raw");
+			expect(Serializer::deserialize(rin)->id == 222, "inner accessible via raw");
+		}
+	}
+
+	// === 23. 100,000 iterations (extreme leak safety) ===
+	section("23. 100,000 heap allocations roundtripped + freed");
+	{
+		bool ok = true;
+		for (int i = 0; i < 100000; ++i) {
+			Data* d = new Data;
+			d->id = i;
+			uintptr_t r = Serializer::serialize(d);
+			Data* p = Serializer::deserialize(r);
+			if (p != d) { ok = false; delete d; break; }
+			delete d;
+		}
+		expect(ok, "100,000 heap alloc + roundtrip + free cycles OK");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
