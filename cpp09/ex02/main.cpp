@@ -391,6 +391,228 @@ static int runTests() {
 		expect(out.find("std::deque") != std::string::npos, "std::deque named");
 	}
 
+	// === 31. Jacobsthal 数境界サイズでのソート ===
+	// Jacobsthal seq: 1, 3, 5, 11, 21, 43. これらのサイズで正しくソートされるか
+	section("31. sort at Jacobsthal boundary sizes (1, 3, 5, 11, 21, 43)");
+	{
+		int sizes[] = { 1, 3, 5, 11, 21, 43 };
+		bool all_ok = true;
+		for (int idx = 0; idx < 6; ++idx) {
+			std::vector<int> v;
+			for (int i = 0; i < sizes[idx]; ++i) v.push_back(std::rand() % 10000);
+			std::vector<int> expected(v);
+			std::sort(expected.begin(), expected.end());
+			PmergeMe::sortVector(v);
+			if (v != expected) { all_ok = false; break; }
+		}
+		expect(all_ok, "Jacobsthal sizes all sort correctly");
+	}
+
+	// === 32. Uniform distribution 大量 ===
+	section("32. uniformly random distribution, various sizes");
+	{
+		int sizes[] = { 50, 100, 250, 500, 1000, 2000 };
+		bool all_ok = true;
+		for (int idx = 0; idx < 6; ++idx) {
+			std::vector<int> v;
+			for (int i = 0; i < sizes[idx]; ++i) v.push_back(std::rand() % 100000);
+			if (!sameAsStdSort(v)) { all_ok = false; break; }
+		}
+		expect(all_ok, "6 sizes 50..2000 all match std::sort");
+	}
+
+	// === 33. Ascending sorted は既ソートで動く ===
+	section("33. pre-sorted ascending: 100 elements");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 100; ++i) v.push_back(i);
+		std::vector<int> expected(v);
+		PmergeMe::sortVector(v);
+		expect(v == expected, "already sorted preserved");
+	}
+
+	// === 34. Descending: 100 element ===
+	section("34. reverse-sorted: 100 elements");
+	{
+		std::vector<int> v;
+		for (int i = 100; i > 0; --i) v.push_back(i);
+		std::vector<int> expected(v);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortVector(v);
+		expect(v == expected, "100 reverse -> sorted");
+	}
+
+	// === 35. Sawtooth pattern ===
+	section("35. sawtooth pattern");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 100; ++i) v.push_back(i % 10);
+		std::vector<int> expected(v);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortVector(v);
+		expect(v == expected, "sawtooth sorted");
+	}
+
+	// === 36. All same value ===
+	section("36. all-same value 100 elements");
+	{
+		std::vector<int> v(100, 42);
+		PmergeMe::sortVector(v);
+		bool ok = true;
+		for (std::size_t i = 0; i < 100; ++i) if (v[i] != 42) { ok = false; break; }
+		expect(ok, "100 x 42 preserved");
+	}
+
+	// === 37. Extreme 50,000 elements ===
+	section("37. 50,000 elements");
+	{
+		std::vector<int> v;
+		v.reserve(50000);
+		for (int i = 0; i < 50000; ++i) v.push_back(std::rand());
+		std::vector<int> expected(v);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortVector(v);
+		expect(v == expected, "50,000 elements match std::sort");
+	}
+
+	// === 38. deque でも 3000 要素、std::sort と一致 ===
+	section("38. deque 3000 elements match std::sort");
+	{
+		std::deque<int> d;
+		for (int i = 0; i < 3000; ++i) d.push_back(std::rand() % 100000);
+		std::deque<int> expected(d);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortDeque(d);
+		expect(d == expected, "3000 deque matches");
+	}
+
+	// === 39. 直後の再ソートが一致 (両 container で同じ結果) ===
+	section("39. vector==deque for 20 random inputs");
+	{
+		bool all_ok = true;
+		for (int iter = 0; iter < 20; ++iter) {
+			int n = 100 + (std::rand() % 500);
+			std::vector<int> v;
+			std::deque<int> d;
+			for (int i = 0; i < n; ++i) {
+				int r = std::rand() % 100000;
+				v.push_back(r);
+				d.push_back(r);
+			}
+			PmergeMe::sortVector(v);
+			PmergeMe::sortDeque(d);
+			bool eq = (v.size() == d.size());
+			for (std::size_t i = 0; eq && i < v.size(); ++i)
+				if (v[i] != d[i]) eq = false;
+			if (!eq) { all_ok = false; break; }
+		}
+		expect(all_ok, "20 iterations vec==deq");
+	}
+
+	// === 40. 特定入力: PDF 5要素 + 全パターン ===
+	section("40. PDF sequence variations (permutations)");
+	{
+		int perms[][5] = {
+			{3, 5, 9, 7, 4},
+			{9, 7, 5, 4, 3},
+			{4, 3, 5, 9, 7},
+			{5, 9, 3, 7, 4},
+			{7, 4, 3, 9, 5}
+		};
+		bool all_ok = true;
+		for (int i = 0; i < 5; ++i) {
+			std::vector<int> v;
+			for (int j = 0; j < 5; ++j) v.push_back(perms[i][j]);
+			PmergeMe::sortVector(v);
+			int expected[] = {3, 4, 5, 7, 9};
+			for (int j = 0; j < 5; ++j) if (v[j] != expected[j]) { all_ok = false; break; }
+			if (!all_ok) break;
+		}
+		expect(all_ok, "5 permutations all -> [3,4,5,7,9]");
+	}
+
+	// === 41. sortAndReport: 実際のタイミングが記録される (非負) ===
+	section("41. sortAndReport records non-negative timings");
+	{
+		std::vector<char*> args;
+		std::vector<std::string> holds;
+		args.push_back((char*)"prog");
+		for (int i = 0; i < 100; ++i) {
+			std::ostringstream oss; oss << (std::rand() % 1000);
+			holds.push_back(oss.str());
+		}
+		for (int i = 0; i < 100; ++i)
+			args.push_back(const_cast<char*>(holds[i].c_str()));
+		PmergeMe p;
+		p.parseInput(args.size(), &args[0]);
+		std::ostringstream oss;
+		std::streambuf* saved = std::cout.rdbuf(oss.rdbuf());
+		p.sortAndReport();
+		std::cout.rdbuf(saved);
+		std::string out = oss.str();
+		expect(out.find("us") != std::string::npos, "'us' present in output");
+		// After 行が sorted か
+		std::size_t pos_after = out.find("After: ");
+		expect(pos_after != std::string::npos, "'After: ' found");
+	}
+
+	// === 42. parseInput after error: state cleared ===
+	section("42. parseInput clears state on new call");
+	{
+		char* argv1[] = { (char*)"prog", (char*)"1", (char*)"2", (char*)"3" };
+		char* argv2[] = { (char*)"prog", (char*)"9", (char*)"8" };
+		PmergeMe p;
+		p.parseInput(4, argv1);
+		p.parseInput(3, argv2);
+		expect(p.vec().size() == 2 && p.vec()[0] == 9, "state overwritten");
+	}
+
+	// === 43. 巨大な value (INT_MAX 近く) ===
+	section("43. INT_MAX-close values sort correctly");
+	{
+		std::vector<int> v;
+		v.push_back(2147483647);
+		v.push_back(2147483000);
+		v.push_back(2147480000);
+		v.push_back(1);
+		v.push_back(0);
+		PmergeMe::sortVector(v);
+		expect(isSorted(v), "sorted");
+		expect(v[0] == 0 && v[4] == 2147483647, "boundary preserved");
+	}
+
+	// === 44. 大量 unique: 5000 sequential integers (逆順) ===
+	section("44. 5000 reverse-sequential ints");
+	{
+		std::vector<int> v;
+		for (int i = 5000; i > 0; --i) v.push_back(i);
+		PmergeMe::sortVector(v);
+		expect(isSorted(v) && v[0] == 1 && v[4999] == 5000, "sorted 1..5000");
+	}
+
+	// === 45. 大量 duplicate stress ===
+	section("45. 5000 elements with only 5 distinct values");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 5000; ++i) v.push_back(std::rand() % 5);
+		std::vector<int> expected(v);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortVector(v);
+		expect(v == expected, "5000 with 5 distinct -> sorted");
+	}
+
+	// === 46. n=100,000 extreme ===
+	section("46. 100,000 elements extreme");
+	{
+		std::vector<int> v;
+		v.reserve(100000);
+		for (int i = 0; i < 100000; ++i) v.push_back(std::rand());
+		std::vector<int> expected(v);
+		std::sort(expected.begin(), expected.end());
+		PmergeMe::sortVector(v);
+		expect(v == expected, "100,000 elements match std::sort");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
