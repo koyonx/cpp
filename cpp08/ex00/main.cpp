@@ -205,6 +205,179 @@ int main() {
 		expect(caught, "not found throws");
 	}
 
+	// === 18. exception message 内容の厳密検証 ===
+	section("18. exception message exact content");
+	{
+		std::vector<int> v;
+		v.push_back(1);
+		try {
+			easyfind(v, 0);
+			expect(false, "should have thrown");
+		} catch (const std::exception& e) {
+			std::string msg = e.what();
+			expect(msg == "easyfind: value not found", "exact message match");
+		}
+	}
+
+	// === 19. iterator 算術: found 後の it+n, distance ===
+	section("19. iterator arithmetic after found (vector: random access)");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 10; ++i) v.push_back(i * 10);
+		std::vector<int>::iterator it = easyfind(v, 30);
+		expect(*(it + 2) == 50, "it+2 -> 50");
+		expect(it - v.begin() == 3, "distance from begin == 3");
+		expect(v.end() - it == 7, "distance to end == 7");
+	}
+
+	// === 20. std::advance / std::distance on list iterator (bidirectional) ===
+	section("20. list iterator + std::advance/std::distance");
+	{
+		std::list<int> l;
+		for (int i = 0; i < 10; ++i) l.push_back(i);
+		std::list<int>::iterator it = easyfind(l, 5);
+		expect(std::distance(l.begin(), it) == 5, "distance == 5");
+		std::advance(it, 2);
+		expect(*it == 7, "advance +2 -> 7");
+	}
+
+	// === 21. Container 不変性 (const-correctness): easyfind は container を変えない ===
+	section("21. easyfind does not modify container");
+	{
+		std::vector<int> v;
+		v.push_back(1); v.push_back(2); v.push_back(3);
+		std::vector<int> original(v);
+		easyfind(v, 2);
+		expect(v == original, "vector unchanged after find");
+	}
+
+	// === 22. All-duplicates container ===
+	section("22. container of all duplicates");
+	{
+		std::vector<int> v(100, 7);  // 100 copies of 7
+		std::vector<int>::iterator it = easyfind(v, 7);
+		expect(it == v.begin(), "first occurrence at begin");
+		expect(*(it + 50) == 7, "still 7 at +50");
+	}
+
+	// === 23. only-one-match: 存在するが 1 個だけ ===
+	section("23. only one occurrence in large container");
+	{
+		std::vector<int> v(1000, 0);
+		v[500] = 42;
+		std::vector<int>::iterator it = easyfind(v, 42);
+		expect(it - v.begin() == 500, "found at position 500");
+	}
+
+	// === 24. Reserved but not-yet-filled vector ===
+	section("24. vector with reserved capacity");
+	{
+		std::vector<int> v;
+		v.reserve(1000);
+		for (int i = 0; i < 10; ++i) v.push_back(i);
+		expect(*easyfind(v, 5) == 5, "found despite over-reserved capacity");
+	}
+
+	// === 25. Insert/erase 後の container ===
+	section("25. easyfind on modified container");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 10; ++i) v.push_back(i);
+		v.insert(v.begin() + 5, 999);
+		expect(*easyfind(v, 999) == 999, "inserted element found");
+		v.erase(v.begin() + 5);
+		bool caught = false;
+		try { easyfind(v, 999); } catch (const std::exception&) { caught = true; }
+		expect(caught, "erased element not found");
+	}
+
+	// === 26. Value == 0 (境界的) ===
+	section("26. value 0 handling");
+	{
+		std::vector<int> v;
+		v.push_back(-1); v.push_back(0); v.push_back(1);
+		expect(*easyfind(v, 0) == 0, "0 found");
+	}
+
+	// === 27. std::deque with wraparound (many push_back/pop_front) ===
+	section("27. std::deque after many push_back/pop_front cycles");
+	{
+		std::deque<int> d;
+		for (int i = 0; i < 1000; ++i) d.push_back(i);
+		for (int i = 0; i < 500; ++i) d.pop_front();
+		// Now d contains 500..999
+		std::deque<int>::iterator it = easyfind(d, 750);
+		expect(*it == 750, "deque wraparound find works");
+	}
+
+	// === 28. 100,000-element large container ===
+	section("28. 100,000-element container");
+	{
+		std::vector<int> v;
+		v.reserve(100000);
+		for (int i = 0; i < 100000; ++i) v.push_back(i);
+		expect(*easyfind(v, 99999) == 99999, "last element found");
+		expect(*easyfind(v, 0) == 0, "first element found");
+		expect(*easyfind(v, 50000) == 50000, "middle element found");
+	}
+
+	// === 29. Same easyfind 何度も呼んでも状態変わらず ===
+	section("29. multiple easyfind calls are deterministic");
+	{
+		std::vector<int> v;
+		v.push_back(10); v.push_back(20); v.push_back(30);
+		std::vector<int>::iterator a = easyfind(v, 20);
+		std::vector<int>::iterator b = easyfind(v, 20);
+		std::vector<int>::iterator c = easyfind(v, 20);
+		expect(a == b && b == c, "3 calls return same iterator");
+	}
+
+	// === 30. std::list with negative values ===
+	section("30. list with negative values");
+	{
+		std::list<int> l;
+		l.push_back(-100); l.push_back(-50); l.push_back(0); l.push_back(50);
+		std::list<int>::iterator it = easyfind(l, -50);
+		expect(*it == -50, "found -50 in list");
+	}
+
+	// === 31. Not-found 例外に依存する制御フローの正しさ ===
+	section("31. control flow using not-found exception");
+	{
+		std::vector<int> v;
+		v.push_back(1); v.push_back(3); v.push_back(5);
+		int missing_count = 0;
+		int found_count = 0;
+		for (int target = 0; target < 10; ++target) {
+			try {
+				easyfind(v, target);
+				++found_count;
+			} catch (const std::exception&) {
+				++missing_count;
+			}
+		}
+		expect(found_count == 3, "3 found (1, 3, 5)");
+		expect(missing_count == 7, "7 missing");
+	}
+
+	// === 32. found iterator を経由した書き込みが container に反映 ===
+	section("32. write via found iterator persists");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 5; ++i) v.push_back(i * 10);
+		*easyfind(v, 20) = -1;
+		expect(v[2] == -1, "index 2 == -1 after write");
+	}
+
+	// === 33. easyfind 経由の iterator は container に紐づく ===
+	section("33. found iterator distance from begin");
+	{
+		std::vector<int> v;
+		for (int i = 0; i < 100; ++i) v.push_back(i);
+		std::vector<int>::iterator it = easyfind(v, 42);
+		expect(std::distance(v.begin(), it) == 42, "distance == 42");
+	}
+
 	// SUMMARY
 	std::cout << "\n=====================================\n";
 	std::cout << "RESULT: " << g_pass << " passed, " << g_fail << " failed." << std::endl;
