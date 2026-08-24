@@ -365,17 +365,20 @@ int main() {
 	section("19. concrete self-assignment");
 	{
 		ShrubberyCreationForm s("self");
-		s = s;
+		ShrubberyCreationForm* ps = &s;
+		s = *ps;
 		expect(s.getTarget() == "self", "shrubbery self-assign");
 	}
 	{
 		RobotomyRequestForm r("self");
-		r = r;
+		RobotomyRequestForm* pr = &r;
+		r = *pr;
 		expect(r.getTarget() == "self", "robotomy self-assign");
 	}
 	{
 		PresidentialPardonForm p("self");
-		p = p;
+		PresidentialPardonForm* pp = &p;
+		p = *pp;
 		expect(p.getTarget() == "self", "pardon self-assign");
 	}
 

@@ -182,7 +182,8 @@ int main() {
 		Intern b(a);
 		Intern c;
 		c = a;
-		c = c;
+		Intern* pc = &c;
+		c = *pc;
 		AForm* f = b.makeForm("robotomy request", "OCF");
 		expect(f != NULL, "b can still makeForm after copy");
 		delete f;

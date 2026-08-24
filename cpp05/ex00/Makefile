@@ -2,9 +2,12 @@ NAME = bureaucrat
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic
 SRCS = main.cpp Bureaucrat.cpp
+HDRS = Bureaucrat.hpp
 OBJS = $(SRCS:.cpp=.o)
 
 all: $(NAME)
+
+$(OBJS): $(HDRS)
 
 $(NAME): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS)

@@ -240,7 +240,8 @@ int main() {
 	section("19. Form self-assignment");
 	{
 		Form f("Self", 42, 42);
-		f = f;
+		Form* self = &f;
+		f = *self;
 		expect(f.getName() == "Self" && f.getGradeToSign() == 42 && f.getGradeToExecute() == 42,
 		       "state preserved");
 	}

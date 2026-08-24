@@ -4,36 +4,37 @@
 #include "RobotomyRequestForm.hpp"
 #include "PresidentialPardonForm.hpp"
 #include <iostream>
-#include <cstddef>
+
+const Intern::FormEntry Intern::_forms[] = {
+	{"shrubbery creation",  &Intern::createShrubberyCreationForm},
+	{"robotomy request",    &Intern::createRobotomyRequestForm},
+	{"presidential pardon", &Intern::createPresidentialPardonForm}
+};
+
+const std::size_t Intern::_formCount = sizeof(_forms) / sizeof(_forms[0]);
 
 Intern::Intern() {}
 Intern::Intern(const Intern&) {}
 Intern& Intern::operator=(const Intern&) { return *this; }
 Intern::~Intern() {}
 
-namespace {
-	template <typename T>
-	AForm* create(const std::string& target) { return new T(target); }
+AForm* Intern::createShrubberyCreationForm(const std::string& target) const {
+	return new ShrubberyCreationForm(target);
+}
 
-	struct FormEntry {
-		const char*	name;
-		AForm*		(*factory)(const std::string&);
-	};
+AForm* Intern::createRobotomyRequestForm(const std::string& target) const {
+	return new RobotomyRequestForm(target);
+}
 
-	const FormEntry kFormTable[] = {
-		{"shrubbery creation",  &create<ShrubberyCreationForm>},
-		{"robotomy request",    &create<RobotomyRequestForm>},
-		{"presidential pardon", &create<PresidentialPardonForm>}
-	};
-
-	const std::size_t kFormTableSize = sizeof(kFormTable) / sizeof(kFormTable[0]);
+AForm* Intern::createPresidentialPardonForm(const std::string& target) const {
+	return new PresidentialPardonForm(target);
 }
 
 AForm* Intern::makeForm(const std::string& name, const std::string& target) const {
-	for (std::size_t i = 0; i < kFormTableSize; ++i) {
-		if (name == kFormTable[i].name) {
+	for (std::size_t i = 0; i < _formCount; ++i) {
+		if (name == _forms[i].name) {
 			std::cout << "Intern creates " << name << std::endl;
-			return kFormTable[i].factory(target);
+			return (this->*_forms[i].factory)(target);
 		}
 	}
 	std::cerr << "Intern: unknown form name \"" << name << "\"" << std::endl;

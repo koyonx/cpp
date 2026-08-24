@@ -175,7 +175,8 @@ int main() {
 	section("14. self-assignment safe");
 	{
 		Bureaucrat s("Self", 42);
-		s = s;
+		Bureaucrat* self = &s;
+		s = *self;
 		expect(s.getName() == "Self" && s.getGrade() == 42, "state preserved");
 	}
 
