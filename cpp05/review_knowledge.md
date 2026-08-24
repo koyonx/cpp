@@ -172,6 +172,35 @@ void Bureaucrat::signForm(Form& form) const {
 
 PDF の出力書式 `<bureaucrat> signed <form>` / `<bureaucrat> couldn't sign <form> because <reason>.` に一致。
 
+### 例外メッセージの設計（`<reason>` に埋め込まれる）
+
+`what()` の戻り値は `because` に続く**理由節としてそのまま文になる**ので、クラス名プレフィックスを付けていない。
+
+```cpp
+const char* Form::GradeTooLowException::what() const throw() {
+    return "the grade is too low";     // ○ "... because the grade is too low."
+ // return "Form: grade too low";      // × "... because Form: grade too low." → 文が壊れる
+}
+```
+
+実際の出力:
+
+```
+Alice signed Contract
+Bob couldn't sign Contract because the grade is too low.
+```
+
+ex02 の `executeForm` も同じ文に埋め込まれるので、`AForm` / `Bureaucrat` の全例外で表現を統一している。
+
+```
+Walter couldn't execute presidential pardon because the form is not signed.
+Walter couldn't execute presidential pardon because the grade is too low.
+Sarah executed presidential pardon
+```
+
+**想定問答 — どのクラスが投げた例外か分からなくならない？**
+A. メッセージから型を判別する必要はありません。型で catch すれば `Form::GradeTooLowException` か `Bureaucrat::GradeTooLowException` かは静的に区別できます（`main.cpp` で具体型での catch をテスト済み）。`what()` は PDF 指定の出力文の一部として使われるので、文として読める表現を優先しました。
+
 ### 循環インクルードの回避
 
 - `Bureaucrat.hpp` は `class Form;`（**前方宣言**）だけ持つ
