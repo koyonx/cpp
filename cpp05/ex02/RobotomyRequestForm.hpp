@@ -17,7 +17,7 @@ public:
 	const std::string&	getTarget() const;
 
 protected:
-	virtual void	action(const Bureaucrat& executor) const;
+	virtual void	action() const;
 };
 
 #endif

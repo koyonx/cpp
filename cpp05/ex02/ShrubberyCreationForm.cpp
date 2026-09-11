@@ -22,8 +22,7 @@ ShrubberyCreationForm::~ShrubberyCreationForm() {}
 
 const std::string& ShrubberyCreationForm::getTarget() const { return _target; }
 
-void ShrubberyCreationForm::action(const Bureaucrat& executor) const {
-	(void)executor;
+void ShrubberyCreationForm::action() const {
 	const std::string filename = _target + "_shrubbery";
 	std::ofstream ofs(filename.c_str());
 	if (!ofs) {

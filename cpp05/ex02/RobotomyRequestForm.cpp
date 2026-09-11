@@ -22,8 +22,7 @@ RobotomyRequestForm::~RobotomyRequestForm() {}
 
 const std::string& RobotomyRequestForm::getTarget() const { return _target; }
 
-void RobotomyRequestForm::action(const Bureaucrat& executor) const {
-	(void)executor;
+void RobotomyRequestForm::action() const {
 	std::cout << "* drilling noises intensify... BZZZZZZZT *" << std::endl;
 	if (std::rand() % 2 == 0)
 		std::cout << _target << " has been robotomized successfully." << std::endl;

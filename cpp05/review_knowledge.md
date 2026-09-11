@@ -243,7 +243,7 @@ grade の数値は `main.cpp` test 1 で PDF どおりか厳密チェックし�
 public:
     void execute(const Bureaucrat& executor) const;      // 共通の枠（非 virtual）
 protected:
-    virtual void action(const Bureaucrat& executor) const = 0;  // 子が埋める穴
+    virtual void action() const = 0;                     // 子が埋める穴
 ```
 
 ```cpp
@@ -251,7 +251,7 @@ protected:
 void AForm::execute(const Bureaucrat& executor) const {
     if (!_signed)                              throw FormNotSignedException();
     if (executor.getGrade() > _gradeToExecute) throw GradeTooLowException();
-    action(executor);                          // ← 派生クラスへ委譲
+    action();                                  // ← 派生クラスへ委譲
 }
 ```
 
@@ -290,6 +290,9 @@ ShrubberyCreationForm& ShrubberyCreationForm::operator=(const ShrubberyCreationF
 
 **Q. 「コンストラクタは target 1 引数だけ」なのにデフォルトコンストラクタがあるのは矛盾では？**
 A. PDF が「Module 02〜09 の全クラスは Orthodox Canonical Form」を要求しているので、デフォルトコンストラクタは必須です。評価シートも「非インターフェースクラスが OCF でなければ採点するな」と書いています。「実用上使う公開コンストラクタは target 1 引数のもの」で、デフォルトコンストラクタは OCF 要件を満たすためのものです。
+
+**Q. `action()` が引数を取らないのはなぜ？**
+A. 必要ないからです。`executor` を使う処理（署名済みか・grade が足りるか）は全て `AForm::execute()` 側で完了しており、`action()` に到達した時点で「実行してよい」ことは確定しています。具象3クラスのどれも executor の情報を使わないので、渡しても `(void)executor;` で捨てるだけの死んだ引数になります。インターフェースは実際に必要な情報だけを取るべきなので削りました。将来 executor を使う Form（例: 実行者名をログに残す）が出てきたら、そのときに引数を足せばよい話です。
 
 **Q. `execute()` のチェック順序（署名 → grade）に意味は？**
 A. 「そもそも署名されていない書類は grade に関係なく実行不能」という業務的な優先順位にしました。test 21 で grade 150 の bureaucrat が未署名フォームを実行しようとしたとき、`GradeTooLow` ではなく `FormNotSigned` が飛ぶことを検証しています。
