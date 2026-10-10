@@ -3,12 +3,15 @@
 
 #include <string>
 #include <stack>
+#include <list>
 
 // PDF ルール: ex00 で使った std::map は使用禁止。
 // ex01 では std::stack を使用 (RPN 評価にネイティブに合う LIFO 構造)
+// std::stack のデフォルトの中身は std::deque で、ex02 で deque を使うため
+// 「同じコンテナでは?」と言われないよう中身を std::list に明示している
 class RPN {
 private:
-	std::stack<int>	_stack;
+	std::stack<int, std::list<int> >	_stack;
 
 	// 演算子適用 (b op a) の順に注意: RPN では 「a b op」 なので pop 順は b, a
 	bool	applyOperator(char op);

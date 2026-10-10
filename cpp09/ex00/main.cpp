@@ -179,9 +179,16 @@ static int runTests() {
 			"2020-06-15,200.0\n");
 		BitcoinExchange btc;
 		btc.loadDatabase("/tmp/mock_db.csv");
-		// PDF は明示していないが、DB より古い日付は最古の rate を返す実装を選択
+		// getRate 単体は最古の rate を返す (processLine 側で事前にエラーにする)
 		expect(btc.getRate("1999-01-01") == 100.0, "pre-DB -> first entry");
+		writeFile("/tmp/tin.txt", "date | value\n1999-01-01 | 5\n2019-12-31 | 1\n2020-01-01 | 1\n");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		expect(contains(cap.err(), "no data available for this date => 1999-01-01"), "1999-01-01 -> error");
+		expect(contains(cap.err(), "no data available for this date => 2019-12-31"), "day before first entry -> error");
+		expect(contains(cap.out(), "2020-01-01 => 1 = 100"), "first entry itself is valid");
 		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
 	}
 
 	// === 11. processInput: PDF 例の入力 ===
@@ -298,7 +305,9 @@ static int runTests() {
 		BitcoinExchange c;
 		c = a;
 		expect(c.getRate("2020-01-01") == 100.0, "operator=");
-		c = c;
+		// c = c; と直接書くと clang の -Wself-assign-overloaded でエラーになるので参照経由
+		BitcoinExchange& self = c;
+		c = self;
 		expect(c.getRate("2020-01-01") == 100.0, "self-assign safe");
 		removeFile("/tmp/mock_db.csv");
 	}
@@ -543,6 +552,31 @@ static int runTests() {
 		expect(btc.getRate("2020-01-01") == 200.0, "year start");
 		// 中間日はない
 		removeFile("/tmp/mock_db.csv");
+	}
+
+	// === 31. 大きな結果も指数表記にならない ===
+	section("31. large results are not printed in scientific notation");
+	{
+		writeFile("/tmp/mock_db.csv",
+			"date,exchange_rate\n"
+			"2022-03-29,47115.93\n");
+		writeFile("/tmp/tin.txt", "date | value\n2022-03-29 | 1000\n");
+		BitcoinExchange btc;
+		btc.loadDatabase("/tmp/mock_db.csv");
+		StreamCapture cap;
+		btc.processInput("/tmp/tin.txt");
+		expect(contains(cap.out(), "2022-03-29 => 1000 = 47115930"), "1000 * 47115.93 = 47115930");
+		expect(!contains(cap.out(), "e+"), "no 'e+' in output");
+		removeFile("/tmp/mock_db.csv");
+		removeFile("/tmp/tin.txt");
+	}
+
+	// === 32. nan / inf は値として受け付けない ===
+	section("32. parseValue: nan rejected, inf too large");
+	{
+		double v;
+		expect(!BitcoinExchange::parseValue("nan", v), "nan rejected");
+		expect(BitcoinExchange::parseValue("inf", v) && v > 1000, "inf parsed -> caller reports too large");
 	}
 
 	// SUMMARY
