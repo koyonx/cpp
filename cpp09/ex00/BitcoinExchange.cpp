@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cctype>
+#include <iomanip>
 
 BitcoinExchange::BitcoinExchange() : _database() {}
 BitcoinExchange::BitcoinExchange(const BitcoinExchange& o) : _database(o._database) {}
@@ -79,6 +80,8 @@ bool BitcoinExchange::parseValue(const std::string& s, double& out) {
 	char* endp = 0;
 	double v = std::strtod(s.c_str(), &endp);
 	if (endp == s.c_str()) return false;
+	// strtod は "nan" も受け付けるので弾く (NaN は自分自身と等しくならない)
+	if (v != v) return false;
 	// 末尾は空白 or NUL のみ許容
 	while (*endp != '\0') {
 		if (!std::isspace(static_cast<unsigned char>(*endp))) return false;
@@ -144,8 +147,16 @@ void BitcoinExchange::processLine(const std::string& line) {
 		return;
 	}
 
+	// DB の最古の日付より前には「直近の過去の日付」が存在しない
+	if (_database.empty() || date < _database.begin()->first) {
+		std::cerr << "Error: no data available for this date => " << date << std::endl;
+		return;
+	}
+
 	double rate = getRate(date);
-	std::cout << date << " => " << value << " = " << (value * rate) << std::endl;
+	// デフォルト精度 (6 桁) だと 47115930 が 4.71159e+07 になるので 10 桁にする
+	std::cout << date << " => " << value << " = "
+			  << std::setprecision(10) << (value * rate) << std::endl;
 }
 
 bool BitcoinExchange::hasDatabase() const { return !_database.empty(); }

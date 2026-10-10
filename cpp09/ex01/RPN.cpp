@@ -1,6 +1,7 @@
 #include "RPN.hpp"
 #include <sstream>
 #include <cctype>
+#include <climits>
 
 RPN::RPN() : _stack() {}
 RPN::RPN(const RPN& o) : _stack(o._stack) {}
@@ -14,9 +15,11 @@ RPN::~RPN() {}
 // stack: push a, push b, op → pop b, pop a, compute (a op b)
 bool RPN::applyOperator(char op) {
 	if (_stack.size() < 2) return false;
-	int b = _stack.top(); _stack.pop();
-	int a = _stack.top(); _stack.pop();
-	int result;
+	// int 同士の演算は long (64bit) で計算し、int に収まらなければエラー
+	// (int のオーバーフローは未定義動作なので事前に検出する)
+	long b = _stack.top(); _stack.pop();
+	long a = _stack.top(); _stack.pop();
+	long result;
 	switch (op) {
 		case '+': result = a + b; break;
 		case '-': result = a - b; break;
@@ -27,7 +30,8 @@ bool RPN::applyOperator(char op) {
 			break;
 		default: return false;
 	}
-	_stack.push(result);
+	if (result > INT_MAX || result < INT_MIN) return false;
+	_stack.push(static_cast<int>(result));
 	return true;
 }
 

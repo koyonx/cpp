@@ -217,8 +217,23 @@ static int runTests() {
 		RPN c;
 		c = a;
 		expect(c.evaluate("6 7 +") == 13, "assigned RPN works");
-		c = c;
+		// c = c; と直接書くと clang の -Wself-assign-overloaded でエラーになるので参照経由
+		RPN& self = c;
+		c = self;
 		expect(c.evaluate("1 1 +") == 2, "self-assign safe");
+	}
+
+	// === 19b. int オーバーフロー → error ===
+	section("19b. int overflow is an error");
+	{
+		RPN rpn;
+		bool caught = false;
+		// 9^11 = 31381059609 > INT_MAX
+		try { rpn.evaluate("9 9 * 9 * 9 * 9 * 9 * 9 * 9 * 9 * 9 * 9 *"); }
+		catch (const std::exception&) { caught = true; }
+		expect(caught, "9^11 throws");
+		// 9^9 = 387420489 は int に収まる
+		expect(rpn.evaluate("9 9 * 9 * 9 * 9 * 9 * 9 * 9 * 9 *") == 387420489, "9^9 OK");
 	}
 
 	// === 20. 10,000 evaluations (leak / stress) ===

@@ -322,7 +322,9 @@ static int runTests() {
 		PmergeMe c;
 		c = a;
 		expect(c.vec() == a.vec(), "operator=");
-		c = c;
+		// c = c; と直接書くと clang の -Wself-assign-overloaded でエラーになるので参照経由
+		PmergeMe& self = c;
+		c = self;
 		expect(c.vec().size() == 2, "self-assign safe");
 	}
 
@@ -611,6 +613,57 @@ static int runTests() {
 		std::sort(expected.begin(), expected.end());
 		PmergeMe::sortVector(v);
 		expect(v == expected, "100,000 elements match std::sort");
+	}
+
+	// === 47. 比較回数が Ford-Johnson の理論上の最悪値以下 ===
+	// F(n) = Σ_{k=1..n} ⌈log2(3k/4)⌉  (n=5:7, 10:22, 12:30, 21:66, 22:71)
+	// Jacobsthal 順・探索範囲の制限がどれか欠けると、この上限を超える
+	section("47. comparisons <= Ford-Johnson bound F(n) (n=1..64, vector & deque)");
+	{
+		bool all_ok = true;
+		std::size_t bound = 0;
+		for (int n = 1; n <= 64 && all_ok; ++n) {
+			// ⌈log2(3n/4)⌉ = 4 * 2^c >= 3n となる最小の c
+			std::size_t c = 0;
+			while ((static_cast<std::size_t>(4) << c) < static_cast<std::size_t>(3 * n)) ++c;
+			bound += c;
+			for (int t = 0; t < 100; ++t) {
+				std::vector<int> v;
+				for (int i = 0; i < n; ++i) v.push_back(std::rand() % 1000);
+				std::deque<int> d(v.begin(), v.end());
+				PmergeMe::resetComparisons();
+				PmergeMe::sortVector(v);
+				std::size_t cv = PmergeMe::comparisons();
+				PmergeMe::resetComparisons();
+				PmergeMe::sortDeque(d);
+				std::size_t cd = PmergeMe::comparisons();
+				if (cv > bound || cd > bound || !isSorted(v) || !isSorted(d)) {
+					std::ostringstream m;
+					m << "n=" << n << " vec=" << cv << " deq=" << cd << " bound=" << bound;
+					expect(false, m.str());
+					all_ok = false;
+					break;
+				}
+			}
+		}
+		expect(all_ok, "all n=1..64 within F(n)");
+	}
+
+	// === 48. 小さい n で最悪値ちょうどに到達する (全順列) ===
+	// n=5 の全 120 順列で最大比較回数が F(5)=7 と一致 = 無駄も不足もない
+	section("48. n=5 all permutations: worst case == F(5) = 7");
+	{
+		int a[] = {1, 2, 3, 4, 5};
+		std::size_t worst = 0;
+		do {
+			std::vector<int> v(a, a + 5);
+			PmergeMe::resetComparisons();
+			PmergeMe::sortVector(v);
+			if (PmergeMe::comparisons() > worst) worst = PmergeMe::comparisons();
+		} while (std::next_permutation(a, a + 5));
+		std::ostringstream m;
+		m << "worst = " << worst;
+		expect(worst == 7, m.str());
 	}
 
 	// SUMMARY

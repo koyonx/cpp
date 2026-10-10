@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 	std::cout << "]" << std::endl;
 
 	printBar("Trace");
-	TraceSort::sort(v, 0);
+	TraceSort::sort(v);
 
 	printBar("Result");
 	std::cout << "Sorted output: [";
@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
 		std::cout << v[i];
 	}
 	std::cout << "]" << std::endl;
+	std::cout << "Total comparisons: " << TraceSort::comparisons() << std::endl;
 
 	return 0;
 }
